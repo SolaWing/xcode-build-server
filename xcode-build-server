@@ -1,0 +1,381 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+import os
+import logging
+import re
+import subprocess
+
+logging.getLogger().setLevel(logging.DEBUG)
+logging.debug(sys.version)
+
+cmd_split_pattern = re.compile(
+    r"""
+"([^"]*)" |     # like "xxx xxx"
+'([^']*)' |     # like 'xxx xxx'
+((?:\\[ ]|\S)+) # like xxx\ xxx
+""", re.X)
+
+
+def isProjectRoot(directory):
+    return os.path.exists(os.path.join(directory, '.git'))
+
+
+def additionalFlags(flagsPath):
+    if flagsPath and os.path.isfile(flagsPath):
+
+        def valid(s):
+            return s and not s.startswith('#')
+
+        with open(flagsPath) as f:
+            return list(filter(valid, (line.strip() for line in f)))
+    return []
+
+
+headerDirsCacheDict = dict()
+
+
+def findAllHeaderDirectory(rootDirectory):
+    headerDirs = headerDirsCacheDict.get(rootDirectory)
+    if headerDirs:
+        return headerDirs
+
+    output = subprocess.check_output(['find', '-L', rootDirectory, '-name', '*.h'], universal_newlines=True)
+    headers = output.splitlines()
+    headerDirs = set()
+    frameworks = set()
+    for h in headers:
+        frameworkIndex = h.rfind('.framework')
+        if frameworkIndex != -1:
+            h = os.path.dirname(h[:frameworkIndex])
+            frameworks.add(h)
+        else:
+            h = os.path.dirname(h)
+            headerDirs.add(h)
+            # contains more one dir for import with module name
+            # don't contains more one module name dir. if need, can specify in .flags
+            # conflict with #if_include framework check
+            #  h = os.path.dirname(h)
+            #  headerDirs.add(h)
+
+    headerDirsCacheDict[rootDirectory] = (headerDirs, frameworks)
+    return headerDirs, frameworks
+
+
+def findAllSwiftFiles(rootDirectory):
+    output = subprocess.check_output(['find', '-H', rootDirectory, '-name', '*.swift'], universal_newlines=True)
+    return [os.path.realpath(l) for l in output.splitlines()]
+
+
+def cmd_split(s):
+    # shlex.split is slow, use a simple version, only consider most case
+    def extract(m):
+        if m.lastindex == 3:  # \ escape version. remove it
+            return m.group(m.lastindex).replace("\\ ", " ")
+        return m.group(m.lastindex)
+
+    return [extract(m) for m in cmd_split_pattern.finditer(s)]
+
+
+def readFileList(path):
+    with open(path) as f:
+        return cmd_split(f.read())
+
+
+def getFileList(path, cache):
+    files = cache.get(path)
+    if files is None:
+        files = readFileList(path)
+        cache[path] = files
+    return files
+
+
+def filterSwiftArgs(items, fileListCache):
+    """
+    f: should return True to accept, return number to skip next number flags
+    """
+    it = iter(items)
+    try:
+        while True:
+            arg = next(it)
+
+            # # -working-directory raise unsupported arg error
+            # if arg in {"-primary-file", "-o", "-serialize-diagnostics-path", "-working-directory", "-Xfrontend"}:
+            #     next(it)
+            #     continue
+            # if arg.startswith("-emit"):
+            #     if arg.endswith("-path"): next(it)
+            #     continue
+            # if arg in {
+            #         "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
+            #         '-whole-module-optimization', "-O"
+            # }:
+            #     continue
+            if arg == "-filelist":  # sourcekit dont support filelist, unfold it
+                yield from getFileList(next(it), fileListCache)
+                continue
+            if arg.startswith("@"):  # swift 5.1 filelist, unfold it
+                yield from getFileList(arg[1:], fileListCache)
+                continue
+            yield arg
+    except StopIteration:
+        pass
+
+
+def findSwiftModuleRoot(filename):
+    """ return project root or None. if not found"""
+    filename = os.path.abspath(filename)
+    directory = os.path.dirname(filename)
+    flagFile = None
+    compileFile = None
+    while directory and directory != '/':
+        p = os.path.join(directory, ".swiftflags")
+        if os.path.isfile(p):
+            return (directory, p, compileFile)  # prefer use swiftflags file as module root directory
+
+        if compileFile is None:
+            p = os.path.join(directory, ".compile")
+            if os.path.isfile(p): compileFile = p
+
+        if isProjectRoot(directory): break
+        else: directory = os.path.dirname(directory)
+    else:
+        return (None, flagFile, compileFile)
+
+    return (directory, flagFile, compileFile)
+
+
+def CommandForSwiftInCompile(filename, compileFile, global_store):
+    store = global_store.setdefault('compile', {})
+    info = store.get(compileFile)
+    if info is None:
+        info = {}
+        store[compileFile] = info  # cache first to avoid re enter when error
+
+        import json
+        with open(compileFile) as f:
+            m = json.load(f)  # type: list
+            info.update((f, i['command']) for i in m if "files" in i and "command" in i
+                        for f in i['files'])  # swift module files
+            info.update((f.strip(), i['command']) for i in m if "fileLists" in i and "command" in i
+                        for l in i['fileLists'] if os.path.isfile(l)
+                        for f in getFileList(l, global_store.setdefault('filelist', {})))  # swift file lists
+            info.update((i["file"], i["command"])  # now not use other argument, like cd
+                        for i in m
+                        if "file" in i and "command" in i)  # single file command
+    return info.get(filename, "")
+
+
+globalStore = {}
+
+
+def FlagsForSwift(filename, **kwargs):
+    store = kwargs.get('store', globalStore)
+    filename = os.path.realpath(filename)
+    final_flags = []
+    project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
+    logging.debug(f"root: {project_root}, {compileFile}")
+    if compileFile:
+        command = CommandForSwiftInCompile(filename, compileFile, store)
+        if command:
+            flags = cmd_split(command)[1:]  # ignore executable
+            final_flags = list(filterSwiftArgs(flags, store.setdefault('filelist', {})))
+
+    if not final_flags and flagFile:
+        headers, frameworks = findAllHeaderDirectory(project_root)
+        for h in headers:
+            final_flags += ['-Xcc', '-I' + h]
+        for f in frameworks:
+            final_flags.append('-F' + f)
+        swiftfiles = findAllSwiftFiles(project_root)
+        final_flags += swiftfiles
+        a = additionalFlags(flagFile)
+        if a:
+            # sourcekit not allow same swift name. so if same name, use the find one to support move file
+            swift_names = set(os.path.basename(p) for p in swiftfiles)
+            final_flags += (arg for arg in filterSwiftArgs(a, store.setdefault('filelist', {}))
+                            if os.path.basename(arg) not in swift_names)
+        else:
+            final_flags += [
+                '-sdk',
+                '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/',
+            ]
+    if not final_flags:
+        final_flags = [
+            filename,
+            '-sdk',
+            '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/',
+        ]
+
+    return {'flags': final_flags, 'do_cache': True}
+
+
+def main():
+    def build_initialize(message):
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {
+                "displayName": "xcode build server",
+                "version": "0.1",
+                "bspVersion": "2.0",
+                "rootUri": message['params']["rootUri"],
+                "capabilities": {
+                    "languageIds": ["swift", "objective-c", "c", "cpp", "objective-cpp"]
+                },
+                "data": {
+                    "indexDatabasePath": "/Users/wang/Desktop/test-swift/indexDatabasePath",
+                    "indexStorePath": "/Users/wang/Library/Developer/Xcode/DerivedData/test-swift-aehpbdmyfwvtdthfgdgqmpdhyrws/Index/DataStore"
+                }
+            }
+        }
+
+    def build_initialized(message):
+        pass
+
+    def workspace_buildTargets(message):
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {
+                "targets": [{
+                    "id": {
+                        "uri": "target:test-swift"
+                    },
+                    "displayName": "test-swift",
+                    "baseDirectory": "file:///Users/wang/Desktop/test-swift/Sources/test-swift",
+                    "tags": ["library"],
+                    "capabilities": {
+                        "canCompile": True,
+                        "canTest": True,
+                        "canRun": False
+                    },
+                    "languageIds": ["objective-c", "swift"],
+                    "dependencies": []
+                }, {
+                    "id": {
+                        "uri": "target:test-swiftTests"
+                    },
+                    "displayName": "Second Target",
+                    "baseDirectory": "file:///Users/wang/Desktop/test-swift/Tests/test-swiftTests",
+                    "tags": ["library", "test"],
+                    "capabilities": {
+                        "canCompile": True,
+                        "canTest": False,
+                        "canRun": False
+                    },
+                    "languageIds": ["objective-c", "swift"],
+                    "dependencies": [{
+                        "uri": "target:test-swift"
+                    }]
+                }]
+            }
+        }
+
+    def buildTarget_sources(message):
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {
+                "items": [{
+                    "target": {
+                        "uri": "target:test-swift"
+                    },
+                    "sources": [
+                        {
+                            "uri": "file:///Users/wang/Desktop/test-swift/Sources/test-swift/a.swift",
+                            "kind": 1,
+                            "generated": False
+                        },
+                        {
+                            "uri": "file:///Users/wang/Desktop/test-swift/Sources/test-swift/test_swift.swift",
+                            "kind": 1,
+                            "generated": False
+                        },
+                    ]
+                }, {
+                    "target": {
+                        "uri": "target:test-swiftTests"
+                    },
+                    "sources": [{
+                        "uri": "file:///Users/wang/Desktop/test-swift/Tests/test-swiftTests/test_swiftTests.swift",
+                        "kind": 1,
+                        "generated": False
+                    }]
+                }]
+            }
+        }
+
+    def textDocument_registerForChanges(message):
+        return {"jsonrpc": "2.0", "id": message["id"], "result": None}
+        # if message["params"]["action"] == "register":
+        #     notification = {
+        #         "jsonrpc": "2.0",
+        #         "method": "build/sourceKitOptionsChanged",
+        #         "params": {
+        #             "uri": message["params"]["uri"],
+        #             "updatedOptions": {
+        #                 "options": ["a", "b"],
+        #                 "workingDirectory": "/some/dir"
+        #             }
+        #         }
+        #     }
+    def textDocument_sourceKitOptions(message):
+        file_path = message["params"]["uri"][len("file://"):]
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {
+                "options": FlagsForSwift(file_path)['flags'],
+                "workingDirectory": "/Users/wang/Desktop/test-swift",
+            }
+        }
+
+    # TODO: outputPaths, no spec? #
+    def build_shutdown(message):
+        return {"jsonrpc": "2.0", "id": message["id"], "result": None}
+
+    def build_exit(message):
+        sys.exit()
+
+    dispatch = locals()
+    while True:
+        line = sys.stdin.readline()
+        if len(line) == 0:
+            break
+
+        assert line.startswith('Content-Length:')
+        length = int(line[len('Content-Length:'):])
+        sys.stdin.readline()
+        raw = sys.stdin.read(length)
+        message = json.loads(raw)
+        logging.debug("Req --> " + raw)
+
+        handler = dispatch.get(message['method'].replace('/', '_'))
+        if handler:
+            response = handler(message)
+        # ignore other notifications
+        elif "id" in message:
+            response = {
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "error": {
+                    "code": 123,
+                    "message": "unhandled method {}".format(message["method"]),
+                }
+            }
+
+        if response:
+            responseStr = json.dumps(response)
+            logging.debug("Res <-- " + responseStr)
+            try:
+                sys.stdout.write("Content-Length: {}\r\n\r\n{}".format(len(responseStr), responseStr))
+                sys.stdout.flush()
+            except IOError:
+                # stdout closed, time to quit
+                break
+
+
+if __name__ == "__main__":
+    main()
