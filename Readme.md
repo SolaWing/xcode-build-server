@@ -16,8 +16,9 @@ Then, the lsp should get the flags from .compile file(which should be in ancesto
 
 # TODO
 
-current implementation is basicly work, but may have some rough edges. PR is welcome.
+current implementation is basicly work, but may have some rough edges. Please report issue if you have any problem. PR is also welcome.
 
 - [ ] auto recognize xcode project and extract compile infomation from it.
 - [ ] scan workspace and provide targets information
 - [ ] observe changes and notify lsp
+- [ ] refactor to swift, make it more frendly for swifter
