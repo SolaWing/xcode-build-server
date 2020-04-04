@@ -1,5 +1,8 @@
 # Xcode-Build-Server
-a [build server protocol](https://build-server-protocol.github.io/docs/specification.html) implement for provide xcode compile infomation to [sourcekit-lsp](https://github.com/apple/sourcekit-lsp)
+
+apple's [sourcekit-lsp](https://github.com/apple/sourcekit-lsp) doesn't support xcode project. but I found it provide a [build server protocol](https://build-server-protocol.github.io/docs/specification.html) to integrate with other build system. this is why I created this repo.
+
+This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with my favorate editor.
 
 # Install
 clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
@@ -12,5 +15,5 @@ Then, xcode build, copy the build log, and run `pbpaste | xcode-build-server par
 Then, the lsp should get the flags from .compile file(which should be in ancestor dir of the swift file)
 
 # TODO
-- [] auto recognize xcode project and extract compile infomation from it.
-- [] scan workspace and provide targets information
+- [ ] auto recognize xcode project and extract compile infomation from it.
+- [ ] scan workspace and provide targets information
