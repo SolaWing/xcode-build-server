@@ -14,11 +14,6 @@ Then, xcode build, copy the build log, and run `pbpaste | xcode-build-server par
 
 Then, the lsp should get the flags from .compile file(which should be in ancestor dir of the swift file)
 
-# TODO
+# More
 
-current implementation is basicly work, but may have some rough edges. Please report issue if you have any problem. PR is also welcome.
-
-- [ ] auto recognize xcode project and extract compile infomation from it.
-- [ ] scan workspace and provide targets information
-- [ ] observe changes and notify lsp
-- [ ] refactor to swift, make it more frendly for swifter
+current implementation is basicly work, but may have some rough edges. Please report issue if you have any problem. If you want to help, can check the open issue list. PR is always welcome.
