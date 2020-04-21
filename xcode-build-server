@@ -21,7 +21,6 @@ def main():
                         "languages": ["swift", "objective-c", "objective-cpp", "c", "cpp"],
                         "argv": [sys.argv[0]]
                     }, f)
-            sys.exit()
         elif sys.argv[1] == 'parse':
             import xclog_parser
 
@@ -29,10 +28,10 @@ def main():
             argv[0] = f"{argv[0]} {argv[1]}"
             del argv[1]
             xclog_parser.main(argv)
-
-    # else serve as build server, and wait json reqest
-    import server
-    server.serve()
+    else:
+        # else serve as build server, and wait json reqest
+        import server
+        server.serve()
 
 
 if __name__ == "__main__":
