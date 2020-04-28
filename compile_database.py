@@ -70,7 +70,7 @@ def cmd_split(s):
 
 def readFileList(path):
     with open(path) as f:
-        return cmd_split(f.read())
+        return [os.path.realpath(i) for i in cmd_split(f.read())]
 
 
 def getFileList(path, cache):
