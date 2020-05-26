@@ -10,6 +10,14 @@ import os
 
 def main():
     if len(sys.argv) > 1:
+        if '-h' == sys.argv[1] or '--help' == sys.argv[1]:
+            print(f"""usage:
+                  {sys.argv[0]}: start a build server
+                  {sys.argv[0]} config: dump buildServer.json to current dir
+                  {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
+                  {sys.argv[0]} [-h|--help]: show help
+                  """)
+            exit(0)
         if sys.argv[1] == 'config':
             # write buildServer.json to cwd
             with open('buildServer.json', 'w') as f:
