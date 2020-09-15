@@ -3,8 +3,11 @@ from compile_database import FlagsForSwift
 
 
 def build_initialize(message):
-    rootUri = message['params']['rootUri']
-    cache_path = os.path.join(os.path.expanduser(f"~/Library/Caches/xcode-build-server"), rootUri.replace('/', '-'))
+    rootUri = message["params"]["rootUri"]
+    cache_path = os.path.join(
+        os.path.expanduser("~/Library/Caches/xcode-build-server"),
+        rootUri.replace("/", "-"),
+    )
     return {
         "jsonrpc": "2.0",
         "id": message["id"],
@@ -19,8 +22,8 @@ def build_initialize(message):
             "data": {
                 "indexDatabasePath": f"{cache_path}/indexDatabasePath",
                 "indexStorePath": f"{cache_path}/indexStorePath",
-            }
-        }
+            },
+        },
     }
 
 
@@ -29,6 +32,7 @@ def build_initialized(message):
 
 
 def workspace_buildTargets(message):
+    # TODO: 这个可能用不上? #
     return {
         "jsonrpc": "2.0",
         "id": message["id"],
@@ -52,11 +56,12 @@ def workspace_buildTargets(message):
                 # }]
                 # }
             ]
-        }
+        },
     }
 
 
 def buildTarget_sources(message):
+    # TODO: 这个可能用不上? #
     return {
         "jsonrpc": "2.0",
         "id": message["id"],
@@ -89,13 +94,15 @@ def buildTarget_sources(message):
                 # }]
                 # }
             ]
-        }
+        },
     }
 
 
 def textDocument_registerForChanges(message):
     return {"jsonrpc": "2.0", "id": message["id"], "result": None}
-    # TODO: observe compile info change #
+    # TODO: observe compile info change
+    # is file save trigger a change and update index?
+
     # if message["params"]["action"] == "register":
     #     notification = {
     #         "jsonrpc": "2.0",
@@ -111,11 +118,11 @@ def textDocument_registerForChanges(message):
 
 
 def textDocument_sourceKitOptions(message):
-    file_path = message["params"]["uri"][len("file://"):]
-    flags = FlagsForSwift(file_path)['flags']  # type: list
+    file_path = message["params"]["uri"][len("file://") :]
+    flags = FlagsForSwift(file_path)["flags"]  # type: list
     try:
-        workdir = flags[flags.index('-working-directory') + 1]
-    except IndexError:
+        workdir = flags[flags.index("-working-directory") + 1]
+    except (IndexError, ValueError):
         workdir = os.getcwd()
     return {
         "jsonrpc": "2.0",
@@ -123,7 +130,7 @@ def textDocument_sourceKitOptions(message):
         "result": {
             "options": flags,
             "workingDirectory": workdir,
-        }
+        },
     }
 
 
@@ -146,14 +153,14 @@ def serve():
         if len(line) == 0:
             break
 
-        assert line.startswith('Content-Length:')
-        length = int(line[len('Content-Length:'):])
+        assert line.startswith("Content-Length:")
+        length = int(line[len("Content-Length:") :])
         sys.stdin.readline()
         raw = sys.stdin.read(length)
         message = json.loads(raw)
         logging.debug("Req --> " + raw)
 
-        handler = dispatch.get(message['method'].replace('/', '_'))
+        handler = dispatch.get(message["method"].replace("/", "_"))
         if handler:
             response = handler(message)
         # ignore other notifications
@@ -164,14 +171,16 @@ def serve():
                 "error": {
                     "code": 123,
                     "message": "unhandled method {}".format(message["method"]),
-                }
+                },
             }
 
         if response:
             responseStr = json.dumps(response)
             logging.debug("Res <-- " + responseStr)
             try:
-                sys.stdout.write("Content-Length: {}\r\n\r\n{}".format(len(responseStr), responseStr))
+                sys.stdout.write(
+                    "Content-Length: {}\r\n\r\n{}".format(len(responseStr), responseStr)
+                )
                 sys.stdout.flush()
             except IOError:
                 # stdout closed, time to quit

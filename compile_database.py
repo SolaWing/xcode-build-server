@@ -5,18 +5,20 @@ cmd_split_pattern = re.compile(
 "([^"]*)" |     # like "xxx xxx"
 '([^']*)' |     # like 'xxx xxx'
 ((?:\\[ ]|\S)+) # like xxx\ xxx
-""", re.X)
+""",
+    re.X,
+)
 
 
 def isProjectRoot(directory):
-    return os.path.exists(os.path.join(directory, '.git'))
+    return os.path.exists(os.path.join(directory, ".git"))
 
 
 def additionalFlags(flagsPath):
     if flagsPath and os.path.isfile(flagsPath):
 
         def valid(s):
-            return s and not s.startswith('#')
+            return s and not s.startswith("#")
 
         with open(flagsPath) as f:
             return list(filter(valid, (line.strip() for line in f)))
@@ -31,12 +33,14 @@ def findAllHeaderDirectory(rootDirectory):
     if headerDirs:
         return headerDirs
 
-    output = subprocess.check_output(['find', '-L', rootDirectory, '-name', '*.h'], universal_newlines=True)
+    output = subprocess.check_output(
+        ["find", "-L", rootDirectory, "-name", "*.h"], universal_newlines=True
+    )
     headers = output.splitlines()
     headerDirs = set()
     frameworks = set()
     for h in headers:
-        frameworkIndex = h.rfind('.framework')
+        frameworkIndex = h.rfind(".framework")
         if frameworkIndex != -1:
             h = os.path.dirname(h[:frameworkIndex])
             frameworks.add(h)
@@ -54,7 +58,9 @@ def findAllHeaderDirectory(rootDirectory):
 
 
 def findAllSwiftFiles(rootDirectory):
-    output = subprocess.check_output(['find', '-H', rootDirectory, '-name', '*.swift'], universal_newlines=True)
+    output = subprocess.check_output(
+        ["find", "-H", rootDirectory, "-name", "*.swift"], universal_newlines=True
+    )
     return [os.path.realpath(l) for l in output.splitlines()]
 
 
@@ -119,17 +125,24 @@ def findSwiftModuleRoot(filename):
     directory = os.path.dirname(filename)
     flagFile = None
     compileFile = None
-    while directory and directory != '/':
+    while directory and directory != "/":
         p = os.path.join(directory, ".swiftflags")
         if os.path.isfile(p):
-            return (directory, p, compileFile)  # prefer use swiftflags file as module root directory
+            return (
+                directory,
+                p,
+                compileFile,
+            )  # prefer use swiftflags file as module root directory
 
         if compileFile is None:
             p = os.path.join(directory, ".compile")
-            if os.path.isfile(p): compileFile = p
+            if os.path.isfile(p):
+                compileFile = p
 
-        if isProjectRoot(directory): break
-        else: directory = os.path.dirname(directory)
+        if isProjectRoot(directory):
+            break
+        else:
+            directory = os.path.dirname(directory)
     else:
         return (None, flagFile, compileFile)
 
@@ -137,23 +150,35 @@ def findSwiftModuleRoot(filename):
 
 
 def CommandForSwiftInCompile(filename, compileFile, global_store):
-    store = global_store.setdefault('compile', {})
+    store = global_store.setdefault("compile", {})
     info = store.get(compileFile)
     if info is None:
         info = {}
         store[compileFile] = info  # cache first to avoid re enter when error
 
         import json
+
         with open(compileFile) as f:
             m = json.load(f)  # type: list
-            info.update((f, i['command']) for i in m if "files" in i and "command" in i
-                        for f in i['files'])  # swift module files
-            info.update((f.strip(), i['command']) for i in m if "fileLists" in i and "command" in i
-                        for l in i['fileLists'] if os.path.isfile(l)
-                        for f in getFileList(l, global_store.setdefault('filelist', {})))  # swift file lists
-            info.update((i["file"], i["command"])  # now not use other argument, like cd
-                        for i in m
-                        if "file" in i and "command" in i)  # single file command
+            info.update(
+                (f, i["command"])
+                for i in m
+                if "files" in i and "command" in i
+                for f in i["files"]
+            )  # swift module files
+            info.update(
+                (f.strip(), i["command"])
+                for i in m
+                if "fileLists" in i and "command" in i
+                for l in i["fileLists"]
+                if os.path.isfile(l)
+                for f in getFileList(l, global_store.setdefault("filelist", {}))
+            )  # swift file lists
+            info.update(
+                (i["file"], i["command"])  # now not use other argument, like cd
+                for i in m
+                if "file" in i and "command" in i
+            )  # single file command
     return info.get(filename, "")
 
 
@@ -161,7 +186,7 @@ globalStore = {}
 
 
 def FlagsForSwift(filename, **kwargs):
-    store = kwargs.get('store', globalStore)
+    store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
     final_flags = []
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
@@ -170,32 +195,35 @@ def FlagsForSwift(filename, **kwargs):
         command = CommandForSwiftInCompile(filename, compileFile, store)
         if command:
             flags = cmd_split(command)[1:]  # ignore executable
-            final_flags = list(filterSwiftArgs(flags, store.setdefault('filelist', {})))
+            final_flags = list(filterSwiftArgs(flags, store.setdefault("filelist", {})))
 
     if not final_flags and flagFile:
         headers, frameworks = findAllHeaderDirectory(project_root)
         for h in headers:
-            final_flags += ['-Xcc', '-I' + h]
+            final_flags += ["-Xcc", "-I" + h]
         for f in frameworks:
-            final_flags.append('-F' + f)
+            final_flags.append("-F" + f)
         swiftfiles = findAllSwiftFiles(project_root)
         final_flags += swiftfiles
         a = additionalFlags(flagFile)
         if a:
             # sourcekit not allow same swift name. so if same name, use the find one to support move file
             swift_names = set(os.path.basename(p) for p in swiftfiles)
-            final_flags += (arg for arg in filterSwiftArgs(a, store.setdefault('filelist', {}))
-                            if os.path.basename(arg) not in swift_names)
+            final_flags += (
+                arg
+                for arg in filterSwiftArgs(a, store.setdefault("filelist", {}))
+                if os.path.basename(arg) not in swift_names
+            )
         else:
             final_flags += [
-                '-sdk',
-                '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/',
+                "-sdk",
+                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
             ]
     if not final_flags:
         final_flags = [
             filename,
-            '-sdk',
-            '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/',
+            "-sdk",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
         ]
 
-    return {'flags': final_flags, 'do_cache': True}
+    return {"flags": final_flags, "do_cache": True}
