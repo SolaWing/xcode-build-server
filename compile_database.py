@@ -179,7 +179,8 @@ def CommandForSwiftInCompile(filename, compileFile, global_store):
                 for i in m
                 if "file" in i and "command" in i
             )  # single file command
-    return info.get(filename, "")
+    # xcode 12 escape =, but not recognized...
+    return info.get(filename, "").replace("\\=", "=")
 
 
 globalStore = {}
