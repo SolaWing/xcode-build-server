@@ -47,10 +47,11 @@ def extract_swift_files_from_swiftc(command):
     # realpath解决了唯一性问题，但是swiftc好像要求传递的参数和命令行的一致...
     # TODO：如果用相对路径，有current directory的问题
     args = cmd_split(command)
+    module_name = next((args[i+1] for (i, v) in enumerate(args) if v == '-module-name'), None)
     files = [os.path.realpath(a) for a in args if a.endswith(".swift")]
     # .SwiftFileList begin with a @ in command
     fileLists = [a[1:] for a in args if a.endswith(".SwiftFileList")]
-    return (files, fileLists)
+    return (files, fileLists, module_name)
 
 
 class XcodeLogParser(object):
@@ -75,18 +76,20 @@ class XcodeLogParser(object):
         if directory: module["directory"] = directory
         module["command"] = command
         files = extract_swift_files_from_swiftc(command)
+        module['module_name'] = files[2]
         module["files"] = files[0]
         module["fileLists"] = files[1]
+        echo(f"CompileSwiftModule {module['module_name']}")
         return module
 
     def parse_compile_swift(self, line):
         m = compile_swift.match(line)
         if not m: return
 
-        echo(f"CompileSwift {m.group(1)}")
         li = read_until_empty_line(self._input)
         if not li: return
 
+        echo(f"CompileSwift {m.group(1)}")
         item = {"file": m.group(1), "command": li[-1]}
         for line in li:
             if line.startswith("cd "):
@@ -104,6 +107,7 @@ class XcodeLogParser(object):
             if isinstance(item, dict): items.append(item)
             else: items.extend(item)
 
+        # @return Future or Item, None to skip it
         matcher = [
             self.parse_compile_swift_module,
             # self.parse_compile_swift,
@@ -147,7 +151,7 @@ def merge_database(items, database_path):
     # 根据ident(file属性)，增量覆盖更新
     def identifier(item):
         if isinstance(item, dict):
-            return item.get("file")
+            return item.get("file") or item.get("module_name")
         return None  # other type info without identifier simplely append into file
 
     with open(database_path, "r+") as f:
@@ -188,7 +192,7 @@ def main(argv = sys.argv):
     parser.add_argument("-a",
                         "--append",
                         action="store_true",
-                        help="append to output file instead of replace. same item will be overwrite")
+                        help="append to output file instead of replace. same item will be overwrite. should specify output")
     a = parser.parse_args(argv[1:])
 
     if a.input == "-": in_fd = sys.stdin
