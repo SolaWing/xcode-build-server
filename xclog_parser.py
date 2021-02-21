@@ -19,7 +19,7 @@ compile_swift = re.compile(
     re.X)
 cmd_split_pattern = re.compile(
     r"""
-"([^"]*)" |     # like "xxx xxx"
+"((?:[^"]|(?<=\\)")*)" |     # like "xxx xxx", allow \"
 '([^']*)' |     # like 'xxx xxx'
 ((?:\\[ ]|\S)+) # like xxx\ xxx
 """, re.X)

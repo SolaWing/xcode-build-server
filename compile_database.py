@@ -2,7 +2,7 @@ import os, re, subprocess, logging
 
 cmd_split_pattern = re.compile(
     r"""
-"([^"]*)" |     # like "xxx xxx"
+"((?:[^"]|(?<=\\)")*)" |     # like "xxx xxx", allow \"
 '([^']*)' |     # like 'xxx xxx'
 ((?:\\[ ]|\S)+) # like xxx\ xxx
 """,
@@ -66,12 +66,14 @@ def findAllSwiftFiles(rootDirectory):
 
 def cmd_split(s):
     # shlex.split is slow, use a simple version, only consider most case
-    def extract(m):
-        if m.lastindex == 3:  # \ escape version. remove it
-            return m.group(m.lastindex).replace("\\ ", " ")
-        return m.group(m.lastindex)
+    import shlex
+    return shlex.split(s) # shlex is more right
+    # def extract(m):
+    #     if m.lastindex == 3:  # \ escape version. remove it
+    #         return m.group(m.lastindex).replace("\\ ", " ")
+    #     return m.group(m.lastindex)
 
-    return [extract(m) for m in cmd_split_pattern.finditer(s)]
+    # return [extract(m) for m in cmd_split_pattern.finditer(s)]
 
 
 def readFileList(path):
