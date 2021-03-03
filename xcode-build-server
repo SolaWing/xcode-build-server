@@ -3,9 +3,14 @@
 import json
 import sys
 import os
-# import logging
-# logging.getLogger().setLevel(logging.DEBUG)
-# logging.debug(sys.version)
+import logging
+
+try:
+    if int(os.environ.get("SOURCEKIT_LOGGING")) >= 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug(f"xcode builde server with python {sys.version}]")
+except Exception as e:
+    pass
 
 
 def main():

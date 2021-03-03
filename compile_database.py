@@ -65,9 +65,9 @@ def findAllSwiftFiles(rootDirectory):
 
 
 def cmd_split(s):
-    # shlex.split is slow, use a simple version, only consider most case
     import shlex
     return shlex.split(s) # shlex is more right
+    # shlex.split is slow, use a simple version, only consider most case
     # def extract(m):
     #     if m.lastindex == 3:  # \ escape version. remove it
     #         return m.group(m.lastindex).replace("\\ ", " ")

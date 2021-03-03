@@ -2,11 +2,36 @@ import sys, logging, json, os
 import urllib.parse
 from compile_database import FlagsForSwift
 
+
+def send(data):
+    dataStr = json.dumps(data)
+    logging.debug("Res <-- " + dataStr)
+    try:
+        sys.stdout.write("Content-Length: {}\r\n\r\n{}".format(len(dataStr), dataStr))
+        sys.stdout.flush()
+    except IOError:
+        # stdout closed, time to quit
+        raise SystemExit(0)
+
+
 def uri2filepath(uri):
     result = urllib.parse.urlparse(uri)
     if result.scheme != 'file':
         raise ValueError(uri)
     return urllib.parse.unquote(result.path)
+
+def optionsForSwiftFile(uri):
+    file_path = uri2filepath(uri)
+    flags = FlagsForSwift(file_path)["flags"]  # type: list
+    try:
+        workdir = flags[flags.index("-working-directory") + 1]
+    except (IndexError, ValueError):
+        workdir = os.getcwd()
+    return {
+        "options": flags,
+        "workingDirectory": workdir,
+    }
+
 
 def server_api():
     def build_initialize(message):
@@ -106,22 +131,25 @@ def server_api():
 
 
     def textDocument_registerForChanges(message):
-        return {"jsonrpc": "2.0", "id": message["id"], "result": None}
+        # empty response
+        send({"jsonrpc": "2.0", "id": message["id"], "result": None})
+
         # TODO: observe compile info change
         # is file save trigger a change and update index?
-
-        # if message["params"]["action"] == "register":
-        #     notification = {
-        #         "jsonrpc": "2.0",
-        #         "method": "build/sourceKitOptionsChanged",
-        #         "params": {
-        #             "uri": message["params"]["uri"],
-        #             "updatedOptions": {
-        #                 "options": ["a", "b"],
-        #                 "workingDirectory": "/some/dir"
-        #             }
-        #         }
-        #     }
+        if message["params"]["action"] == "register":
+            uri = message["params"]["uri"]
+            try:
+                notification = {
+                    "jsonrpc": "2.0",
+                    "method": "build/sourceKitOptionsChanged",
+                    "params": {
+                        "uri": uri,
+                        "updatedOptions": optionsForSwiftFile(uri)
+                    }
+                }
+                send(notification)
+            except ValueError as e: # may have other type change register, like target
+                logging.debug(e)
 
 
     def textDocument_sourceKitOptions(message):
@@ -134,10 +162,7 @@ def server_api():
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": {
-                "options": flags,
-                "workingDirectory": workdir,
-            },
+            "result": optionsForSwiftFile(message["params"]["uri"])
         }
 
 
@@ -184,13 +209,4 @@ def serve():
             }
 
         if response:
-            responseStr = json.dumps(response)
-            logging.debug("Res <-- " + responseStr)
-            try:
-                sys.stdout.write(
-                    "Content-Length: {}\r\n\r\n{}".format(len(responseStr), responseStr)
-                )
-                sys.stdout.flush()
-            except IOError:
-                # stdout closed, time to quit
-                break
+            send(response)
