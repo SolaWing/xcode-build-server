@@ -163,13 +163,13 @@ def CommandForSwiftInCompile(filename, compileFile, global_store):
         with open(compileFile) as f:
             m = json.load(f)  # type: list
             info.update(
-                (f, i["command"])
+                (f.lower(), i["command"])
                 for i in m
                 if "files" in i and "command" in i
                 for f in i["files"]
             )  # swift module files
             info.update(
-                (f.strip(), i["command"])
+                (f.strip().lower(), i["command"])
                 for i in m
                 if "fileLists" in i and "command" in i
                 for l in i["fileLists"]
@@ -177,12 +177,12 @@ def CommandForSwiftInCompile(filename, compileFile, global_store):
                 for f in getFileList(l, global_store.setdefault("filelist", {}))
             )  # swift file lists
             info.update(
-                (i["file"], i["command"])  # now not use other argument, like cd
+                (i["file"].lower(), i["command"])  # now not use other argument, like cd
                 for i in m
                 if "file" in i and "command" in i
             )  # single file command
     # xcode 12 escape =, but not recognized...
-    return info.get(filename, "").replace("\\=", "=")
+    return info.get(filename.lower(), "").replace("\\=", "=")
 
 
 globalStore = {}
