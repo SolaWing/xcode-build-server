@@ -1,4 +1,7 @@
-import os, re, subprocess, logging
+import logging
+import os
+import re
+import subprocess
 
 cmd_split_pattern = re.compile(
     r"""
@@ -66,7 +69,8 @@ def findAllSwiftFiles(rootDirectory):
 
 def cmd_split(s):
     import shlex
-    return shlex.split(s) # shlex is more right
+
+    return shlex.split(s)  # shlex is more right
     # shlex.split is slow, use a simple version, only consider most case
     # def extract(m):
     #     if m.lastindex == 3:  # \ escape version. remove it
@@ -122,7 +126,7 @@ def filterSwiftArgs(items, fileListCache):
 
 
 def findSwiftModuleRoot(filename):
-    """ return project root or None. if not found"""
+    """return project root or None. if not found"""
     filename = os.path.abspath(filename)
     directory = os.path.dirname(filename)
     flagFile = None

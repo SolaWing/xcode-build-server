@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import json
-import sys
-import os
 import logging
+import os
+import sys
 
 try:
     if int(os.environ.get("SOURCEKIT_LOGGING")) >= 1:
@@ -15,26 +15,36 @@ except Exception as e:
 
 def main():
     if len(sys.argv) > 1:
-        if '-h' == sys.argv[1] or '--help' == sys.argv[1]:
-            print(f"""usage:
+        if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
+            print(
+                f"""usage:
                   {sys.argv[0]}: start a build server
                   {sys.argv[0]} config: dump buildServer.json to current dir
                   {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
                   {sys.argv[0]} [-h|--help]: show help
-                  """)
+                  """
+            )
             exit(0)
-        if sys.argv[1] == 'config':
+        if sys.argv[1] == "config":
             # write buildServer.json to cwd
-            with open('buildServer.json', 'w') as f:
+            with open("buildServer.json", "w") as f:
                 json.dump(
                     {
                         "name": "xcode build server",
                         "version": "0.1",
                         "bspVersion": "2.0",
-                        "languages": ["swift", "objective-c", "objective-cpp", "c", "cpp"],
-                        "argv": [sys.argv[0]]
-                    }, f)
-        elif sys.argv[1] == 'parse':
+                        "languages": [
+                            "swift",
+                            "objective-c",
+                            "objective-cpp",
+                            "c",
+                            "cpp",
+                        ],
+                        "argv": [sys.argv[0]],
+                    },
+                    f,
+                )
+        elif sys.argv[1] == "parse":
             import xclog_parser
 
             argv = sys.argv.copy()
@@ -44,6 +54,7 @@ def main():
     else:
         # else serve as build server, and wait json reqest
         import server
+
         server.serve()
 
 

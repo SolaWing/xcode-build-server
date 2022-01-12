@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import re, os, sys
+import os
+import re
+import sys
 
 
 def echo(s):
     print(s, file=sys.stderr)
 
 
-compile_swift_module = re.compile(r"""
+compile_swift_module = re.compile(
+    r"""
     ^CompileSwiftSources\s*
-""", re.X)
+    """,
+    re.X,
+)
 compile_swift = re.compile(
     r"""^CompileSwift\s+
-                          \w+\s+ # normal
-                          \w+\s+ # x86_64
-                          (.+)$""",  # file
-    re.X)
+        \w+\s+ # normal
+        \w+\s+ # x86_64
+        (.+)$
+    """,  # file
+    re.X,
+)
 cmd_split_pattern = re.compile(
     r"""
-"((?:[^"]|(?<=\\)")*)" |     # like "xxx xxx", allow \"
-'([^']*)' |     # like 'xxx xxx'
-((?:\\[ ]|\S)+) # like xxx\ xxx
-""", re.X)
+        "((?:[^"]|(?<=\\)")*)" | # like "xxx xxx", allow \"
+        '([^']*)' |              # like 'xxx xxx'
+        ((?:\\[ ]|\S)+)          # like xxx\ xxx
+    """,
+    re.X,
+)
 
 
 def cmd_split(s):
@@ -39,7 +48,8 @@ def read_until_empty_line(i):
     li = []
     while True:
         line = next(i).strip()
-        if not line: return li
+        if not line:
+            return li
         li.append(line)
 
 
@@ -47,7 +57,9 @@ def extract_swift_files_from_swiftc(command):
     # realpath解决了唯一性问题，但是swiftc好像要求传递的参数和命令行的一致...
     # TODO：如果用相对路径，有current directory的问题
     args = cmd_split(command)
-    module_name = next((args[i+1] for (i, v) in enumerate(args) if v == '-module-name'), None)
+    module_name = next(
+        (args[i + 1] for (i, v) in enumerate(args) if v == "-module-name"), None
+    )
     files = [os.path.realpath(a) for a in args if a.endswith(".swift")]
     # .SwiftFileList begin with a @ in command
     fileLists = [a[1:] for a in args if a.endswith(".SwiftFileList")]
@@ -61,10 +73,12 @@ class XcodeLogParser(object):
 
     def parse_compile_swift_module(self, line):
         m = compile_swift_module.match(line)
-        if not m: return
+        if not m:
+            return
 
         li = read_until_empty_line(self._input)
-        if not li: return
+        if not li:
+            return
 
         command = li[-1]  # type: str
         if "bin/swiftc " not in command:
@@ -72,11 +86,12 @@ class XcodeLogParser(object):
             return
 
         module = {}
-        directory = next((i[len("cd "):] for i in li if i.startswith("cd ")), None)
-        if directory: module["directory"] = directory
+        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        if directory:
+            module["directory"] = directory
         module["command"] = command
         files = extract_swift_files_from_swiftc(command)
-        module['module_name'] = files[2]
+        module["module_name"] = files[2]
         module["files"] = files[0]
         module["fileLists"] = files[1]
         echo(f"CompileSwiftModule {module['module_name']}")
@@ -84,28 +99,33 @@ class XcodeLogParser(object):
 
     def parse_compile_swift(self, line):
         m = compile_swift.match(line)
-        if not m: return
+        if not m:
+            return
 
         li = read_until_empty_line(self._input)
-        if not li: return
+        if not li:
+            return
 
         echo(f"CompileSwift {m.group(1)}")
         item = {"file": m.group(1), "command": li[-1]}
         for line in li:
             if line.startswith("cd "):
-                item["directory"] = line[len("cd "):]
+                item["directory"] = line[len("cd ") :]
                 break
         return item
 
     def parse(self):
         from inspect import iscoroutine
         import asyncio
+
         items = []
         futures = []
 
         def append(item):
-            if isinstance(item, dict): items.append(item)
-            else: items.extend(item)
+            if isinstance(item, dict):
+                items.append(item)
+            else:
+                items.extend(item)
 
         # @return Future or Item, None to skip it
         matcher = [
@@ -132,7 +152,9 @@ class XcodeLogParser(object):
 
         if len(futures) > 0:
             echo("waiting... ")
-            for item in asyncio.get_event_loop().run_until_complete(asyncio.gather(*futures)):
+            for item in asyncio.get_event_loop().run_until_complete(
+                asyncio.gather(*futures)
+            ):
                 append(item)
 
         return items
@@ -140,6 +162,7 @@ class XcodeLogParser(object):
 
 def dump_database(items, output):
     import json
+
     # pretty print, easy to read with editor. compact save little size. only about 0.2%
     json.dump(items, output, ensure_ascii=False, check_circular=False, indent="\t")
 
@@ -161,7 +184,8 @@ def merge_database(items, database_path):
         new_file_map = {}
         for item in items:
             ident = identifier(item)
-            if ident: new_file_map[ident] = item
+            if ident:
+                new_file_map[ident] = item
 
         dealed = set()
 
@@ -172,7 +196,8 @@ def merge_database(items, database_path):
                     dealed.add(ident)
 
                     new_item = new_file_map.get(ident)
-                    if new_item: return new_item
+                    if new_item:
+                        return new_item
             return old_item
 
         # 旧item中不变的, 以及被更新的，和新item中新添加的
@@ -184,20 +209,32 @@ def merge_database(items, database_path):
         f.truncate()
 
 
-def main(argv = sys.argv):
+def main(argv=sys.argv):
     import argparse
-    parser = argparse.ArgumentParser(prog = argv[0], description="pass xcodebuild output log, use stderr as log")
-    parser.add_argument("input", nargs="?", default="-", help="input file, default will use stdin")
-    parser.add_argument("-o", "--output", default="-", help="output file, default will be stdout")
-    parser.add_argument("-a",
-                        "--append",
-                        action="store_true",
-                        help="append to output file instead of replace. same item will be overwrite. should specify output")
+
+    parser = argparse.ArgumentParser(
+        prog=argv[0], description="pass xcodebuild output log, use stderr as log"
+    )
+    parser.add_argument(
+        "input", nargs="?", default="-", help="input file, default will use stdin"
+    )
+    parser.add_argument(
+        "-o", "--output", default="-", help="output file, default will be stdout"
+    )
+    parser.add_argument(
+        "-a",
+        "--append",
+        action="store_true",
+        help="append to output file instead of replace. same item will be overwrite. should specify output",
+    )
     a = parser.parse_args(argv[1:])
 
-    if a.input == "-": in_fd = sys.stdin
-    else: in_fd = open(a.input, "r")
-    if a.output == "-": get_out_fd = lambda: sys.stdout
+    if a.input == "-":
+        in_fd = sys.stdin
+    else:
+        in_fd = open(a.input, "r")
+    if a.output == "-":
+        get_out_fd = lambda: sys.stdout
     else:
         get_out_fd = lambda: open(a.output, "w")  # open will clear file
 

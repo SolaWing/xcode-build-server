@@ -1,5 +1,9 @@
-import sys, logging, json, os
+import json
+import logging
+import os
+import sys
 import urllib.parse
+
 from compile_database import FlagsForSwift
 
 
@@ -16,9 +20,10 @@ def send(data):
 
 def uri2filepath(uri):
     result = urllib.parse.urlparse(uri)
-    if result.scheme != 'file':
+    if result.scheme != "file":
         raise ValueError(uri)
     return urllib.parse.unquote(result.path)
+
 
 def optionsForSwiftFile(uri):
     file_path = uri2filepath(uri)
@@ -58,10 +63,8 @@ def server_api():
             },
         }
 
-
     def build_initialized(message):
         pass
-
 
     def workspace_buildTargets(message):
         # TODO: 这个可能用不上? #
@@ -90,7 +93,6 @@ def server_api():
                 ]
             },
         }
-
 
     def buildTarget_sources(message):
         # TODO: 这个可能用不上? #
@@ -129,7 +131,6 @@ def server_api():
             },
         }
 
-
     def textDocument_registerForChanges(message):
         # empty response
         send({"jsonrpc": "2.0", "id": message["id"], "result": None})
@@ -142,15 +143,11 @@ def server_api():
                 notification = {
                     "jsonrpc": "2.0",
                     "method": "build/sourceKitOptionsChanged",
-                    "params": {
-                        "uri": uri,
-                        "updatedOptions": optionsForSwiftFile(uri)
-                    }
+                    "params": {"uri": uri, "updatedOptions": optionsForSwiftFile(uri)},
                 }
                 send(notification)
-            except ValueError as e: # may have other type change register, like target
+            except ValueError as e:  # may have other type change register, like target
                 logging.debug(e)
-
 
     def textDocument_sourceKitOptions(message):
         file_path = uri2filepath(message["params"]["uri"])
@@ -162,14 +159,12 @@ def server_api():
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": optionsForSwiftFile(message["params"]["uri"])
+            "result": optionsForSwiftFile(message["params"]["uri"]),
         }
-
 
     # TODO: outputPaths, no spec? #
     def build_shutdown(message):
         return {"jsonrpc": "2.0", "id": message["id"], "result": None}
-
 
     def build_exit(message):
         sys.exit()
@@ -194,6 +189,7 @@ def serve():
         message = json.loads(raw)
         logging.debug("Req --> " + raw)
 
+        response = None
         handler = dispatch.get(message["method"].replace("/", "_"))
         if handler:
             response = handler(message)
