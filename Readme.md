@@ -8,11 +8,20 @@ This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with 
 clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 # Usage
-In Workspace root, run `xcode-build-server config` to generate buildServer.json. so sourcekit-lsp will use xcode-build-server to provide compile infomation.
+**xcode build, copy the build log, and then in Workspace root**, run:
 
-Then, xcode build, copy the build log, and run `pbpaste | xcode-build-server parse -o .compile` to put formatted compile log into the module root dir.
+`pbpaste | xcode-build-server parse`
 
-Then, the lsp should get the flags from .compile file(which should be in ancestor dir of the swift file)
+this should generate buildServer.json, which hook sourcekit-lsp to use the buildServer to provide compile infomation
+and a .compile hidden file, which provide actual compile command
+
+last, restart your language server, and it should work.
+
+if your build environment changes(eg: add new files, switch sdk, debug/release, conditional macro, etc..), just repeat previous action to update compile info
+
+## Index And Build
+[sourcekit-lsp](https://github.com/apple/sourcekit-lsp#indexing-while-building) use indexing while build.
+if you found find definition or references is not work correctly, just build it from xcode to update index
 
 # More
 

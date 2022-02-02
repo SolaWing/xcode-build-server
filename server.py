@@ -8,14 +8,14 @@ from compile_database import FlagsForSwift
 
 
 def send(data):
-    dataStr = json.dumps(data)
-    logging.debug("Res <-- " + dataStr)
+    data_str = json.dumps(data)
+    logging.debug("Res <-- %s", data_str)
     try:
-        sys.stdout.write("Content-Length: {}\r\n\r\n{}".format(len(dataStr), dataStr))
+        sys.stdout.write(f"Content-Length: {len(data_str)}\r\n\r\n{data_str}")
         sys.stdout.flush()
-    except IOError:
+    except IOError as e:
         # stdout closed, time to quit
-        raise SystemExit(0)
+        raise SystemExit(0) from e
 
 
 def uri2filepath(uri):
@@ -45,6 +45,13 @@ def server_api():
             os.path.expanduser("~/Library/Caches/xcode-build-server"),
             rootUri.replace("/", "-"),
         )
+        rootPath = uri2filepath(rootUri)
+        configPath = os.path.join(rootPath, "buildServer.json")
+        indexStorePath = None
+        if os.path.exists(configPath):
+            with open(configPath) as f:
+                indexStorePath = json.load(f).get("indexStorePath", None)
+
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
@@ -57,8 +64,11 @@ def server_api():
                     "languageIds": ["swift", "objective-c", "c", "cpp", "objective-cpp"]
                 },
                 "data": {
+                    # storepath是build生成的数据
+                    # db是相应的加速缓存
+                    # 需要根据rooturi拿到对应的indexstorepath的路径
                     "indexDatabasePath": f"{cache_path}/indexDatabasePath",
-                    "indexStorePath": f"{cache_path}/indexStorePath",
+                    "indexStorePath": indexStorePath if indexStorePath else f"{cache_path}/indexStorePath",
                 },
             },
         }

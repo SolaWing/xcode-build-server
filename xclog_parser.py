@@ -60,10 +60,13 @@ def extract_swift_files_from_swiftc(command):
     module_name = next(
         (args[i + 1] for (i, v) in enumerate(args) if v == "-module-name"), None
     )
+    index_store_path = next(
+        (args[i + 1] for (i, v) in enumerate(args) if v == "-index-store-path"), None
+    )
     files = [os.path.realpath(a) for a in args if a.endswith(".swift")]
     # .SwiftFileList begin with a @ in command
     fileLists = [a[1:] for a in args if a.endswith(".SwiftFileList")]
-    return (files, fileLists, module_name)
+    return (files, fileLists, module_name, index_store_path)
 
 
 class XcodeLogParser(object):
@@ -94,6 +97,8 @@ class XcodeLogParser(object):
         module["module_name"] = files[2]
         module["files"] = files[0]
         module["fileLists"] = files[1]
+        if files[3]:
+            self.index_store_path.add(files[3])
         echo(f"CompileSwiftModule {module['module_name']}")
         return module
 
@@ -120,6 +125,8 @@ class XcodeLogParser(object):
 
         items = []
         futures = []
+        self.index_store_path = set()
+        self.items = items
 
         def append(item):
             if isinstance(item, dict):
@@ -219,7 +226,9 @@ def main(argv=sys.argv):
         "input", nargs="?", default="-", help="input file, default will use stdin"
     )
     parser.add_argument(
-        "-o", "--output", default="-", help="output file, default will be stdout"
+        "-o",
+        "--output",
+        help="output file, when this not set, will dump to cwd .compile file, also generate a buildServer.json with indexStorePath",
     )
     parser.add_argument(
         "-a",
@@ -233,16 +242,30 @@ def main(argv=sys.argv):
         in_fd = sys.stdin
     else:
         in_fd = open(a.input, "r")
-    if a.output == "-":
-        get_out_fd = lambda: sys.stdout
-    else:
-        get_out_fd = lambda: open(a.output, "w")  # open will clear file
 
-    items = XcodeLogParser(in_fd, echo).parse()
-    if a.append and os.path.exists(a.output):
-        merge_database(items, a.output)
+    parser = XcodeLogParser(in_fd, echo)
+    items = parser.parse()
+    
+    if a.output == "-":
+        return dump_database(items, sys.stdout)
+    if a.output is None:
+        output = ".compile"
+        from config import dump_server_config
+
+        for index_store_path in parser.index_store_path:
+            echo(f"use index_store_path at {index_store_path}")
+            break
+        else:
+            index_store_path = None
+        dump_server_config(store=index_store_path)
     else:
-        dump_database(items, get_out_fd())
+        output = a.output
+
+    if a.append and os.path.exists(output):
+        merge_database(items, output)
+    else:
+        # open will clear file
+        dump_database(items, open(output, "w"))
 
 
 if __name__ == "__main__":

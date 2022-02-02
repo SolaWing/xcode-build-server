@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 
-import json
 import logging
 import os
 import sys
 
-try:
-    if int(os.environ.get("SOURCEKIT_LOGGING")) >= 1:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.debug(f"xcode builde server with python {sys.version}]")
-except Exception as e:
-    pass
+level = os.environ.get("SOURCEKIT_LOGGING")
+if level is not None and int(level) >= 1:
+    logging.getLogger().setLevel(logging.DEBUG)
+    logging.debug(f"xcode builde server with python {sys.version}]")
 
-
+# logging.getLogger().setLevel(logging.DEBUG)
 def main():
     if len(sys.argv) > 1:
         if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
@@ -26,24 +23,8 @@ def main():
             )
             exit(0)
         if sys.argv[1] == "config":
-            # write buildServer.json to cwd
-            with open("buildServer.json", "w") as f:
-                json.dump(
-                    {
-                        "name": "xcode build server",
-                        "version": "0.1",
-                        "bspVersion": "2.0",
-                        "languages": [
-                            "swift",
-                            "objective-c",
-                            "objective-cpp",
-                            "c",
-                            "cpp",
-                        ],
-                        "argv": [sys.argv[0]],
-                    },
-                    f,
-                )
+            from config import dump_server_config
+            dump_server_config()
         elif sys.argv[1] == "parse":
             import xclog_parser
 
