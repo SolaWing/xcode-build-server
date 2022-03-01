@@ -189,22 +189,30 @@ def CommandForSwiftInCompile(filename, compileFile, global_store):
     return info.get(filename.lower(), "").replace("\\=", "=")
 
 
-globalStore = {}
-
-
-def FlagsForSwift(filename, **kwargs):
-    store = kwargs.get("store", globalStore)
-    filename = os.path.realpath(filename)
-    final_flags = []
-    project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
-    logging.debug(f"root: {project_root}, {compileFile}")
+def FlagsForSwiftInCompile(filename, compileFile, store):
     if compileFile:
         command = CommandForSwiftInCompile(filename, compileFile, store)
         if command:
             flags = cmd_split(command)[1:]  # ignore executable
-            final_flags = list(filterSwiftArgs(flags, store.setdefault("filelist", {})))
+            return list(filterSwiftArgs(flags, store.setdefault("filelist", {})))
+
+globalStore = {}
+
+
+def FlagsForSwift(filename, compileFile = None, **kwargs):
+    store = kwargs.get("store", globalStore)
+    filename = os.path.realpath(filename)
+    final_flags = None
+    if compileFile:
+        if final_flags := FlagsForSwiftInCompile(filename, compileFile, store):
+            return {"flags": final_flags, "do_cache": True}
+
+    project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
+    logging.debug(f"root: {project_root}, {compileFile}")
+    final_flags = FlagsForSwiftInCompile(filename, compileFile, store)
 
     if not final_flags and flagFile:
+        final_flags = []
         headers, frameworks = findAllHeaderDirectory(project_root)
         for h in headers:
             final_flags += ["-Xcc", "-I" + h]

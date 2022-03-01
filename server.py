@@ -25,9 +25,9 @@ def uri2filepath(uri):
     return urllib.parse.unquote(result.path)
 
 
-def optionsForSwiftFile(uri):
+def optionsForSwiftFile(uri, compile_file = None):
     file_path = uri2filepath(uri)
-    flags = FlagsForSwift(file_path)["flags"]  # type: list
+    flags = FlagsForSwift(file_path, compile_file)["flags"]  # type: list
     try:
         workdir = flags[flags.index("-working-directory") + 1]
     except (IndexError, ValueError):
@@ -39,13 +39,20 @@ def optionsForSwiftFile(uri):
 
 
 def server_api():
+    compile_file = None # 优先共用root compile_file里的编译信息
     def build_initialize(message):
+        nonlocal compile_file
+
         rootUri = message["params"]["rootUri"]
         cache_path = os.path.join(
             os.path.expanduser("~/Library/Caches/xcode-build-server"),
             rootUri.replace("/", "-"),
         )
         rootPath = uri2filepath(rootUri)
+        v = os.path.join(rootPath, '.compile')
+        if os.path.exists(v) and compile_file is None:
+            compile_file = v
+
         configPath = os.path.join(rootPath, "buildServer.json")
         indexStorePath = None
         if os.path.exists(configPath):
@@ -142,7 +149,7 @@ def server_api():
         }
 
     def textDocument_registerForChanges(message):
-        # empty response
+        # empty response, ensure response before notification
         send({"jsonrpc": "2.0", "id": message["id"], "result": None})
 
         # TODO: observe compile info change
@@ -153,23 +160,17 @@ def server_api():
                 notification = {
                     "jsonrpc": "2.0",
                     "method": "build/sourceKitOptionsChanged",
-                    "params": {"uri": uri, "updatedOptions": optionsForSwiftFile(uri)},
+                    "params": {"uri": uri, "updatedOptions": optionsForSwiftFile(uri, compile_file)},
                 }
                 send(notification)
             except ValueError as e:  # may have other type change register, like target
                 logging.debug(e)
 
     def textDocument_sourceKitOptions(message):
-        file_path = uri2filepath(message["params"]["uri"])
-        flags = FlagsForSwift(file_path)["flags"]  # type: list
-        try:
-            workdir = flags[flags.index("-working-directory") + 1]
-        except (IndexError, ValueError):
-            workdir = os.getcwd()
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": optionsForSwiftFile(message["params"]["uri"]),
+            "result": optionsForSwiftFile(message["params"]["uri"], compile_file),
         }
 
     # TODO: outputPaths, no spec? #
