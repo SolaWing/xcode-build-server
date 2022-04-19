@@ -17,7 +17,11 @@ and a .compile hidden file, which provide actual compile command
 
 last, restart your language server, and it should work.
 
-if your build environment changes(eg: add new files, switch sdk, debug/release, conditional macro, etc..), just repeat previous action to update compile info
+if your build environment changes(eg: add new files, switch sdk, debug/release, conditional macro, etc..) and language server work incorrectly, just repeat previous action to update compile info
+
+PS: Recent Xcode may copy failed. if the case, use the export button to save log to file, and in workspace root run:
+
+`xcode-build-server parse <PATH/TO/Log>`
 
 ## Index And Build
 [sourcekit-lsp](https://github.com/apple/sourcekit-lsp#indexing-while-building) use indexing while build.
