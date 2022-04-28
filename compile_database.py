@@ -197,18 +197,26 @@ def FlagsForSwiftInCompile(filename, compileFile, store):
             return list(filterSwiftArgs(flags, store.setdefault("filelist", {})))
 
 globalStore = {}
-
+# inherit compile file, for situation crossing root dir
+firstCompileFile = None
 
 def FlagsForSwift(filename, compileFile = None, **kwargs):
     store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
     final_flags = None
+    global firstCompileFile
     if compileFile:
+        if firstCompileFile is None: firstCompileFile = compileFile
         if final_flags := FlagsForSwiftInCompile(filename, compileFile, store):
+            return {"flags": final_flags, "do_cache": True}
+
+    if firstCompileFile and firstCompileFile != compileFile:
+        if final_flags := FlagsForSwiftInCompile(filename, firstCompileFile, store):
             return {"flags": final_flags, "do_cache": True}
 
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
     logging.debug(f"root: {project_root}, {compileFile}")
+    if firstCompileFile is None: firstCompileFile = compileFile
     final_flags = FlagsForSwiftInCompile(filename, compileFile, store)
 
     if not final_flags and flagFile:
