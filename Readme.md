@@ -25,7 +25,9 @@ PS: Recent Xcode may copy failed. if the case, use the export button to save log
 
 ## Sync Xcodebuild log
 xcode-build-server provider post-build-action script to auto parse newest log into .compile and generate buildServer.json.  
-just add `xcode-build-server postaction | bash &` into script in **scheme -> build -> Post-actions**. and script should choose provide build settings from target
+just add `xcode-build-server postaction | bash &` into script in **scheme -> Build -> Post-actions**. and script should choose provide build settings from target
+<img width="918" alt="图片" src="https://user-images.githubusercontent.com/3897953/178139213-cb655340-28f6-49f6-8e7d-666bb29e664f.png">
+
 after this, the compile info should auto generate when xcode build and no need further manual parse.
 
 ## Index And Build
