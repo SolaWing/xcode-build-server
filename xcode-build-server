@@ -7,9 +7,9 @@ import sys
 level = os.environ.get("SOURCEKIT_LOGGING")
 if level is not None and int(level) >= 1:
     logging.getLogger().setLevel(logging.DEBUG)
-    logging.debug(f"xcode builde server with python {sys.version}]")
+    logging.debug(f"# xcode builde server with python {sys.version}]")
 
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 def main():
     if len(sys.argv) > 1:
         if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
@@ -18,6 +18,7 @@ def main():
                   {sys.argv[0]}: start a build server
                   {sys.argv[0]} config: dump buildServer.json to current dir
                   {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
+                  {sys.argv[0]} postaction: dump a xcode post build bash script to sync flags to .compile
                   {sys.argv[0]} [-h|--help]: show help
                   """
             )
@@ -32,6 +33,61 @@ def main():
             argv[0] = f"{argv[0]} {argv[1]}"
             del argv[1]
             xclog_parser.main(argv)
+        elif sys.argv[1]  == "postaction":
+            sys.stdout.write(r'''
+                # need the following min environment to run this script
+                # WORKSPACE_PATH
+                # SCHEME_NAME
+                if [[ -n $SCHEME_ACTION_NAME ]]; then
+                    currentSeconds=$(date +%s)
+                else
+                    currentSeconds=0 # not wait newer script generate
+                fi
+
+                # exec &>/tmp/a.log
+                if [[ -z $WORKSPACE_PATH ]]; then
+                    echo "you should run this script in xcode post build action or provide WORKSPACE_PATH and SCHEME_NAME environment"
+                    exit 2
+                fi
+                
+                if [[ -z $SRCROOT ]]; then
+                    if [[ $WORKSPACE_PATH == *xcodeproj/project.xcworkspace ]]; then
+                        cd "$WORKSPACE_PATH"/../..
+                    else
+                        cd "$WORKSPACE_PATH"/..
+                    fi
+                    SRCROOT=$(pwd)
+                else
+                    cd "$SRCROOT"
+                fi
+                if [[ -n $INDEX_DATA_STORE_DIR ]]; then
+                    ROOT="$INDEX_DATA_STORE_DIR"/../..
+                else
+                    ROOT=$(xcodebuild -showBuildSettings -workspace "$WORKSPACE_PATH" -scheme "$SCHEME_NAME" 2>/dev/null | grep "\bBUILD_DIR =" | head -1 | awk '{print $3}' | tr -d '"')/../..
+                fi
+                GeneratePath="buildServer.json"
+                if (( currentSeconds != 0 )); then
+                    # xcode may delay generate log file, wait it for a while
+                    ManifestPath="$ROOT"/Logs/Build/LogStoreManifest.plist
+                    function validElapsedTime() {
+                        lastModificationSeconds=$(date -r "$ManifestPath" "+%s")
+                        (( lastModificationSeconds > currentSeconds - 60 ))
+                    }
+                    for (( i = 0; i < 10; i++ )); do
+                        if [[ $ManifestPath -nt $GeneratePath ]] && validElapsedTime; then
+                            break
+                        fi
+                        sleep 1
+                    done
+                    if (( i == 10 )); then
+                        echo "no newer $ManifestPath generate in 10 seconds, abort"
+                        exit 3
+                    fi
+                fi
+                echo pwd: $(pwd)
+                xcode-build-server parse -as "$ROOT"
+                touch "$GeneratePath"
+            ''')
     else:
         # else serve as build server, and wait json reqest
         import server

@@ -250,6 +250,7 @@ def main(argv=sys.argv):
     if a.sync:
         from xcactivitylog import newest_logpath, extract_compile_log
         xcpath = newest_logpath(os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist"))
+        echo(f"extract_compile_log at {xcpath}")
         in_fd = extract_compile_log(xcpath)
     elif a.xcactivitylog:
         from xcactivitylog import extract_compile_log
