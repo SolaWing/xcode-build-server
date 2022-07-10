@@ -74,9 +74,8 @@ class XcodeLogParser(object):
         self._input = _input
         self._log = _logFunc
 
-    def parse_compile_swift_module(self, line):
-        m = compile_swift_module.match(line)
-        if not m:
+    def parse_compile_swift_module(self, line: str):
+        if not line.startswith("CompileSwiftSources "):
             return
 
         li = read_until_empty_line(self._input)
@@ -236,9 +235,26 @@ def main(argv=sys.argv):
         action="store_true",
         help="append to output file instead of replace. same item will be overwrite. should specify output",
     )
+    parser.add_argument(
+        "-l",
+        "--xcactivitylog",
+        help="xcactivitylog path, overwrite input param"
+    )
+    parser.add_argument(
+        "-s",
+        "--sync",
+        help="xcode build root path, use to extract newest xcactivitylog, eg: /Users/xxx/Library/Developer/Xcode/DerivedData/XXXProject-xxxhash/"
+    )
     a = parser.parse_args(argv[1:])
 
-    if a.input == "-":
+    if a.sync:
+        from xcactivitylog import newest_logpath, extract_compile_log
+        xcpath = newest_logpath(os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist"))
+        in_fd = extract_compile_log(xcpath)
+    elif a.xcactivitylog:
+        from xcactivitylog import extract_compile_log
+        in_fd = extract_compile_log(a.xcactivitylog)
+    elif a.input == "-":
         in_fd = sys.stdin
     else:
         in_fd = open(a.input, "r")

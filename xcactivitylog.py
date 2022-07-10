@@ -79,4 +79,24 @@ def tokenizer(path):
                 i = 0 # consume and reset
             else: i+=1
 
-# tokenizer('36C1B4AD-7938-4FD2-B8EE-D0EDCCB00396.xcactivitylog')
+def extract_compile_log(path):
+    for (type, value) in tokenizer(path):
+        if type != TokenType.String: continue
+        assert isinstance(value, str)
+        if not value.startswith("CompileSwiftSources "): continue
+        lines = value.splitlines()
+        if len(lines) > 1:
+            yield from iter(lines)
+            yield "" # a empty line means section log end
+
+def newest_logpath(metapath):
+    import plistlib
+    with open(metapath, "rb") as f:
+        meta = plistlib.load(f)
+        logs = [v for v in meta["logs"].values()]
+        logs.sort(key= lambda v: v["timeStoppedRecording"], reverse=True)
+        return os.path.join(os.path.dirname(metapath), logs[0]["fileName"])
+
+# newest_logpath("LogStoreManifest.plist")
+# for l in extract_compile_log('36C1B4AD-7938-4FD2-B8EE-D0EDCCB00396.xcactivitylog'):
+#     print(l)
