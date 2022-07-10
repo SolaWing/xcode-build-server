@@ -23,6 +23,11 @@ PS: Recent Xcode may copy failed. if the case, use the export button to save log
 
 `xcode-build-server parse <PATH/TO/Log>`
 
+## Sync Xcodebuild log
+xcode-build-server provider post-build-action script to auto parse newest log into .compile and generate buildServer.json.  
+just add `xcode-build-server postaction | bash &` into script in **scheme -> build -> Post-actions**. and script should choose provide build settings from target
+after this, the compile info should auto generate when xcode build and no need further manual parse.
+
 ## Index And Build
 [sourcekit-lsp](https://github.com/apple/sourcekit-lsp#indexing-while-building) use indexing while build.
 if you found find definition or references is not work correctly, just build it from xcode to update index
