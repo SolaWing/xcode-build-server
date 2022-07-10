@@ -8,6 +8,7 @@ This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with 
 clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 # Usage
+## Manual Parse Xcodebuild log
 **xcode build, copy the build log, and then in Workspace root**, run:
 
 `pbpaste | xcode-build-server parse`
