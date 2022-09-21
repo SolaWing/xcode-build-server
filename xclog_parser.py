@@ -4,6 +4,7 @@
 import os
 import re
 import sys
+from typing import Iterator, List
 
 
 def echo(s):
@@ -44,7 +45,7 @@ def cmd_split(s):
     return [extract(m) for m in cmd_split_pattern.finditer(s)]
 
 
-def read_until_empty_line(i):
+def read_until_empty_line(i: Iterator[str]) -> List[str]:
     li = []
     while True:
         line = next(i).strip()
@@ -70,7 +71,7 @@ def extract_swift_files_from_swiftc(command):
 
 
 class XcodeLogParser(object):
-    def __init__(self, _input, _logFunc):
+    def __init__(self, _input: Iterator[str], _logFunc):
         self._input = _input
         self._log = _logFunc
 
@@ -100,6 +101,39 @@ class XcodeLogParser(object):
             self.index_store_path.add(files[3])
         echo(f"CompileSwiftModule {module['module_name']}")
         return module
+
+    def parse_swift_driver_module(self, line: str):
+        if not line.startswith("SwiftDriver\\ Compilation "):
+            return
+
+        li = read_until_empty_line(self._input)
+        if not li: return
+
+        command = li[-1]
+        # 忽略builtin-Swift-Compilation-Requirements
+        if not command.startswith("builtin-Swift-Compilation -- "):
+            return
+
+        if "bin/swiftc " not in command:
+            echo("Error: ================= Can't found swiftc\n" + command)
+            return
+
+        command = command[len("builtin-Swift-Compilation -- "):]
+
+        module = {}
+        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        if directory:
+            module["directory"] = directory
+        module["command"] = command
+        files = extract_swift_files_from_swiftc(command)
+        module["module_name"] = files[2]
+        module["files"] = files[0]
+        module["fileLists"] = files[1]
+        if files[3]:
+            self.index_store_path.add(files[3])
+        echo(f"CompileSwiftModule {module['module_name']}")
+        return module
+
 
     def parse_compile_swift(self, line):
         m = compile_swift.match(line)
@@ -135,6 +169,7 @@ class XcodeLogParser(object):
 
         # @return Future or Item, None to skip it
         matcher = [
+            self.parse_swift_driver_module,
             self.parse_compile_swift_module,
             # self.parse_compile_swift,
         ]
