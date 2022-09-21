@@ -109,11 +109,12 @@ def filterSwiftArgs(items, fileListCache):
             # if arg.startswith("-emit"):
             #     if arg.endswith("-path"): next(it)
             #     continue
-            # if arg in {
-            #         "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
-            #         '-whole-module-optimization', "-O"
-            # }:
-            #     continue
+            if arg in { # will make sourcekit report errors
+                    "-use-frontend-parseable-output"
+                    # "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
+                    # '-whole-module-optimization',
+            }:
+                continue
             if arg == "-filelist":  # sourcekit dont support filelist, unfold it
                 yield from getFileList(next(it), fileListCache)
                 continue
