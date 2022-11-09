@@ -103,7 +103,16 @@ class XcodeLogParser(object):
         return module
 
     def parse_swift_driver_module(self, line: str):
-        if not line.startswith("SwiftDriver\\ Compilation "):
+        # match cases 1:
+        # SwiftDriver XXXDevEEUnitTest normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'XXXDevEEUnitTest' from project 'XXXDev')
+        # cd ...
+        # builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name XXXDevEEUnitTest
+
+        # match cases 2:
+        # SwiftDriver\ Compilation XXX normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'XXX' from project 'XXX')
+        # cd ...
+        # builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name XXX
+        if not line.startswith("SwiftDriver"):
             return
 
         li = read_until_empty_line(self._input)
@@ -111,14 +120,14 @@ class XcodeLogParser(object):
 
         command = li[-1]
         # 忽略builtin-Swift-Compilation-Requirements
-        if not command.startswith("builtin-Swift-Compilation -- "):
+        if not (command.startswith("builtin-Swift-Compilation -- ") or command.startswith("builtin-SwiftDriver -- ")):
             return
 
         if "bin/swiftc " not in command:
             echo("Error: ================= Can't found swiftc\n" + command)
             return
 
-        command = command[len("builtin-Swift-Compilation -- "):]
+        command = command[(command.index(" -- ") + len(" -- ")):]
 
         module = {}
         directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
