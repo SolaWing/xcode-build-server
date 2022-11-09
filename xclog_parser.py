@@ -11,20 +11,6 @@ def echo(s):
     print(s, file=sys.stderr)
 
 
-compile_swift_module = re.compile(
-    r"""
-    ^CompileSwiftSources\s*
-    """,
-    re.X,
-)
-compile_swift = re.compile(
-    r"""^CompileSwift\s+
-        \w+\s+ # normal
-        \w+\s+ # x86_64
-        (.+)$
-    """,  # file
-    re.X,
-)
 cmd_split_pattern = re.compile(
     r"""
         "((?:[^"]|(?<=\\)")*)" | # like "xxx xxx", allow \"
@@ -144,23 +130,6 @@ class XcodeLogParser(object):
         return module
 
 
-    def parse_compile_swift(self, line):
-        m = compile_swift.match(line)
-        if not m:
-            return
-
-        li = read_until_empty_line(self._input)
-        if not li:
-            return
-
-        echo(f"CompileSwift {m.group(1)}")
-        item = {"file": m.group(1), "command": li[-1]}
-        for line in li:
-            if line.startswith("cd "):
-                item["directory"] = line[len("cd ") :]
-                break
-        return item
-
     def parse(self):
         from inspect import iscoroutine
         import asyncio
@@ -180,7 +149,6 @@ class XcodeLogParser(object):
         matcher = [
             self.parse_swift_driver_module,
             self.parse_compile_swift_module,
-            # self.parse_compile_swift,
         ]
         try:
             while True:
