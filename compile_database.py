@@ -178,8 +178,8 @@ def CommandForSwiftInCompile(filename, compileFile, global_store):
                 for i in m
                 if "fileLists" in i and "command" in i
                 for l in i["fileLists"]
-                if os.path.isfile(l)
-                for f in getFileList(l, global_store.setdefault("filelist", {}))
+                if os.path.isfile(l.replace("\\", ""))
+                for f in getFileList(l.replace("\\", ""), global_store.setdefault("filelist", {}))
             )  # swift file lists
             info.update(
                 (i["file"].lower(), i["command"])  # now not use other argument, like cd
