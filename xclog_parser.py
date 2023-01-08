@@ -20,6 +20,8 @@ cmd_split_pattern = re.compile(
     re.X,
 )
 
+clang_pattern = re.compile(r"^\s*\S*clang\S*")
+
 
 def cmd_split(s):
     # shlex.split is slow, use a simple version, only consider most case
@@ -102,18 +104,22 @@ class XcodeLogParser(object):
             return
 
         li = read_until_empty_line(self._input)
-        if not li: return
+        if not li:
+            return
 
         command = li[-1]
         # 忽略builtin-Swift-Compilation-Requirements
-        if not (command.startswith("builtin-Swift-Compilation -- ") or command.startswith("builtin-SwiftDriver -- ")):
+        if not (
+            command.startswith("builtin-Swift-Compilation -- ")
+            or command.startswith("builtin-SwiftDriver -- ")
+        ):
             return
 
         if "bin/swiftc " not in command:
             echo("Error: ================= Can't found swiftc\n" + command)
             return
 
-        command = command[(command.index(" -- ") + len(" -- ")):]
+        command = command[(command.index(" -- ") + len(" -- ")) :]
 
         module = {}
         directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
@@ -129,6 +135,31 @@ class XcodeLogParser(object):
         echo(f"CompileSwiftModule {module['module_name']}")
         return module
 
+    def parse_c(self, line):
+        if not line.startswith("CompileC "):
+            return
+
+        li = read_until_empty_line(self._input)
+        if not li:
+            return
+
+        command = li[-1]
+        if not re.match(clang_pattern, command):
+            echo("Error: ========== Can't found clang\n" + command)
+            return
+
+        info = cmd_split(line)
+
+        module = {}
+        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        if directory:
+            module["directory"] = directory
+        module["command"] = command
+        module["file"] = info[2]
+        module["output"] = info[1]
+
+        echo(f"CompileC {info[2]}")
+        return module
 
     def parse(self):
         from inspect import iscoroutine
@@ -149,6 +180,7 @@ class XcodeLogParser(object):
         matcher = [
             self.parse_swift_driver_module,
             self.parse_compile_swift_module,
+            self.parse_c,
         ]
         try:
             while True:
@@ -248,24 +280,26 @@ def main(argv=sys.argv):
         help="append to output file instead of replace. same item will be overwrite. should specify output",
     )
     parser.add_argument(
-        "-l",
-        "--xcactivitylog",
-        help="xcactivitylog path, overwrite input param"
+        "-l", "--xcactivitylog", help="xcactivitylog path, overwrite input param"
     )
     parser.add_argument(
         "-s",
         "--sync",
-        help="xcode build root path, use to extract newest xcactivitylog, eg: /Users/xxx/Library/Developer/Xcode/DerivedData/XXXProject-xxxhash/"
+        help="xcode build root path, use to extract newest xcactivitylog, eg: /Users/xxx/Library/Developer/Xcode/DerivedData/XXXProject-xxxhash/",
     )
     a = parser.parse_args(argv[1:])
 
     if a.sync:
         from xcactivitylog import newest_logpath, extract_compile_log
-        xcpath = newest_logpath(os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist"))
+
+        xcpath = newest_logpath(
+            os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist")
+        )
         echo(f"extract_compile_log at {xcpath}")
         in_fd = extract_compile_log(xcpath)
     elif a.xcactivitylog:
         from xcactivitylog import extract_compile_log
+
         in_fd = extract_compile_log(a.xcactivitylog)
     elif a.input == "-":
         in_fd = sys.stdin
@@ -274,7 +308,7 @@ def main(argv=sys.argv):
 
     parser = XcodeLogParser(in_fd, echo)
     items = parser.parse()
-    
+
     if a.output == "-":
         return dump_database(items, sys.stdout)
     if a.output is None:
