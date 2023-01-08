@@ -2,6 +2,12 @@ import logging
 import os
 import re
 import subprocess
+from typing import List
+
+
+globalStore = {}
+# inherit compile file, for situation crossing root dir
+firstCompileFile = None
 
 cmd_split_pattern = re.compile(
     r"""
@@ -85,7 +91,7 @@ def readFileList(path):
         return [os.path.realpath(i) for i in cmd_split(f.read())]
 
 
-def getFileList(path, cache):
+def getFileList(path, cache) -> List[str]:
     files = cache.get(path)
     if files is None:
         files = readFileList(path)
@@ -93,14 +99,14 @@ def getFileList(path, cache):
     return files
 
 
-def filterSwiftArgs(items, fileListCache):
+def filterFlags(items, fileListCache):
     """
     f: should return True to accept, return number to skip next number flags
     """
     it = iter(items)
     try:
         while True:
-            arg = next(it)
+            arg: str = next(it)
 
             # # -working-directory raise unsupported arg error
             # if arg in {"-primary-file", "-o", "-serialize-diagnostics-path", "-working-directory", "-Xfrontend"}:
@@ -109,10 +115,10 @@ def filterSwiftArgs(items, fileListCache):
             # if arg.startswith("-emit"):
             #     if arg.endswith("-path"): next(it)
             #     continue
-            if arg in { # will make sourcekit report errors
-                    "-use-frontend-parseable-output"
-                    # "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
-                    # '-whole-module-optimization',
+            if arg in {  # will make sourcekit report errors
+                "-use-frontend-parseable-output"
+                # "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
+                # '-whole-module-optimization',
             }:
                 continue
             if arg == "-filelist":  # sourcekit dont support filelist, unfold it
@@ -156,69 +162,75 @@ def findSwiftModuleRoot(filename):
     return (directory, flagFile, compileFile)
 
 
-def CommandForSwiftInCompile(filename, compileFile, global_store):
+def commandForFile(filename, compileFile, global_store):
     store = global_store.setdefault("compile", {})
     info = store.get(compileFile)
-    if info is None:
+    if info is None:  # load {filename.lower: command} dict
         info = {}
         store[compileFile] = info  # cache first to avoid re enter when error
 
         import json
 
         with open(compileFile) as f:
-            m = json.load(f)  # type: list
-            info.update(
-                (f.lower(), i["command"])
-                for i in m
-                if "files" in i and "command" in i
-                for f in i["files"]
-            )  # swift module files
-            info.update(
-                (f.strip().lower(), i["command"])
-                for i in m
-                if "fileLists" in i and "command" in i
-                for l in i["fileLists"]
-                if os.path.isfile(l)
-                for f in getFileList(l, global_store.setdefault("filelist", {}))
-            )  # swift file lists
-            info.update(
-                (i["file"].lower(), i["command"])  # now not use other argument, like cd
-                for i in m
-                if "file" in i and "command" in i
-            )  # single file command
+            m: List[dict] = json.load(f)
+            for i in m:
+                command = i.get("command")
+                if not command:
+                    continue
+                if files := i.get("files"):  # batch files, eg: swift module
+                    info.update((f.lower(), command) for f in files)
+                if fileLists := i.get(
+                    "fileLists"
+                ):  # file list store in a dedicated file
+                    info.update(
+                        (f.strip().lower(), command)
+                        for l in fileLists
+                        if os.path.isfile(l)
+                        for f in getFileList(l, global_store.setdefault("filelist", {}))
+                    )
+                if file := i.get("file"):  # single file info
+                    info[file.lower()] = command
     # xcode 12 escape =, but not recognized...
     return info.get(filename.lower(), "").replace("\\=", "=")
 
 
-def FlagsForSwiftInCompile(filename, compileFile, store):
+def GetFlagsInCompile(filename, compileFile, store):
+    """read flags from compileFile"""
     if compileFile:
-        command = CommandForSwiftInCompile(filename, compileFile, store)
+        command = commandForFile(filename, compileFile, store)
         if command:
             flags = cmd_split(command)[1:]  # ignore executable
-            return list(filterSwiftArgs(flags, store.setdefault("filelist", {})))
+            return list(filterFlags(flags, store.setdefault("filelist", {})))
 
-globalStore = {}
-# inherit compile file, for situation crossing root dir
-firstCompileFile = None
 
-def FlagsForSwift(filename, compileFile = None, **kwargs):
+def GetFlags(filename: str, compileFile=None, **kwargs):
+    """sourcekit entry function"""
     store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
-    final_flags = None
     global firstCompileFile
     if compileFile:
-        if firstCompileFile is None: firstCompileFile = compileFile
-        if final_flags := FlagsForSwiftInCompile(filename, compileFile, store):
+        if firstCompileFile is None:
+            firstCompileFile = compileFile
+        if final_flags := GetFlagsInCompile(filename, compileFile, store):
             return {"flags": final_flags, "do_cache": True}
 
     if firstCompileFile and firstCompileFile != compileFile:
-        if final_flags := FlagsForSwiftInCompile(filename, firstCompileFile, store):
+        if final_flags := GetFlagsInCompile(filename, firstCompileFile, store):
             return {"flags": final_flags, "do_cache": True}
 
+    if filename.endswith(".swift"):
+        return InferFlagsForSwift(filename, store)
+    return {"flags": [], "do_cache": False}
+
+
+def InferFlagsForSwift(filename, store):
+    """try infer flags by convention and workspace files"""
+    global firstCompileFile
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
     logging.debug(f"root: {project_root}, {compileFile}")
-    if firstCompileFile is None: firstCompileFile = compileFile
-    final_flags = FlagsForSwiftInCompile(filename, compileFile, store)
+    if firstCompileFile is None:
+        firstCompileFile = compileFile
+    final_flags = GetFlagsInCompile(filename, compileFile, store)
 
     if not final_flags and flagFile:
         final_flags = []
@@ -235,7 +247,7 @@ def FlagsForSwift(filename, compileFile = None, **kwargs):
             swift_names = set(os.path.basename(p) for p in swiftfiles)
             final_flags += (
                 arg
-                for arg in filterSwiftArgs(a, store.setdefault("filelist", {}))
+                for arg in filterFlags(a, store.setdefault("filelist", {}))
                 if os.path.basename(arg) not in swift_names
             )
         else:

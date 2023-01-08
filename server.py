@@ -4,7 +4,7 @@ import os
 import sys
 import urllib.parse
 
-from compile_database import FlagsForSwift
+from compile_database import GetFlags
 
 
 def send(data):
@@ -25,9 +25,9 @@ def uri2filepath(uri):
     return urllib.parse.unquote(result.path)
 
 
-def optionsForSwiftFile(uri, compile_file = None):
+def optionsForFile(uri, compile_file=None):
     file_path = uri2filepath(uri)
-    flags = FlagsForSwift(file_path, compile_file)["flags"]  # type: list
+    flags = GetFlags(file_path, compile_file)["flags"]  # type: list
     try:
         workdir = flags[flags.index("-working-directory") + 1]
     except (IndexError, ValueError):
@@ -39,7 +39,9 @@ def optionsForSwiftFile(uri, compile_file = None):
 
 
 def server_api():
-    compile_file = None # 优先共用root compile_file里的编译信息
+    """nest def is api, return by locals()"""
+    compile_file = None  # 优先共用root compile_file里的编译信息
+
     def build_initialize(message):
         nonlocal compile_file
 
@@ -49,7 +51,7 @@ def server_api():
             rootUri.replace("/", "-"),
         )
         rootPath = uri2filepath(rootUri)
-        v = os.path.join(rootPath, '.compile')
+        v = os.path.join(rootPath, ".compile")
         if os.path.exists(v) and compile_file is None:
             compile_file = v
 
@@ -59,6 +61,8 @@ def server_api():
             with open(configPath) as f:
                 indexStorePath = json.load(f).get("indexStorePath", None)
 
+        if not indexStorePath:
+            indexStorePath = f"{cache_path}/indexStorePath"
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
@@ -75,7 +79,7 @@ def server_api():
                     # db是相应的加速缓存
                     # 需要根据rooturi拿到对应的indexstorepath的路径
                     "indexDatabasePath": f"{cache_path}/indexDatabasePath",
-                    "indexStorePath": indexStorePath if indexStorePath else f"{cache_path}/indexStorePath",
+                    "indexStorePath": indexStorePath,
                 },
             },
         }
@@ -160,7 +164,10 @@ def server_api():
                 notification = {
                     "jsonrpc": "2.0",
                     "method": "build/sourceKitOptionsChanged",
-                    "params": {"uri": uri, "updatedOptions": optionsForSwiftFile(uri, compile_file)},
+                    "params": {
+                        "uri": uri,
+                        "updatedOptions": optionsForFile(uri, compile_file),
+                    },
                 }
                 send(notification)
             except ValueError as e:  # may have other type change register, like target
@@ -170,7 +177,7 @@ def server_api():
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": optionsForSwiftFile(message["params"]["uri"], compile_file),
+            "result": optionsForFile(message["params"]["uri"], compile_file),
         }
 
     # TODO: outputPaths, no spec? #
