@@ -39,10 +39,10 @@ def cmd_split(s):
 def read_until_empty_line(i: Iterator[str]) -> List[str]:
     li = []
     while True:
-        line = next(i).strip()
+        line = next(i)
         if not line:
             return li
-        li.append(line)
+        li.append(line.strip())
 
 
 def extract_swift_files_from_swiftc(command):
