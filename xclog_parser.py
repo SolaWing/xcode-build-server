@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from typing import Iterator, List
+import shlex
 
 
 def echo(s):
@@ -19,6 +20,16 @@ cmd_split_pattern = re.compile(
     """,
     re.X,
 )
+pch_capture = re.compile(
+    r"""
+    -include\s (?:
+        "(?:[^"]|(?<=\\)")*" | # like "xxx xxx", allow \"
+        '[^']*' |              # like 'xxx xxx'
+        (?:\\[ ]|\S)+          # like xxx\ xxx
+    )
+""",
+    re.X,
+)
 
 clang_pattern = re.compile(r"^\s*\S*clang\S*")
 
@@ -26,14 +37,16 @@ clang_pattern = re.compile(r"^\s*\S*clang\S*")
 def cmd_split(s):
     # shlex.split is slow, use a simple version, only consider most case
     # in mine project test, custom regex is 2.54s, shlex.split is 4.9s
-    import shlex
     return shlex.split(s)  # shlex is more right
-    # def extract(m):
-    #     if m.lastindex == 3:  # \ escape version. remove it
-    #         return m.group(m.lastindex).replace("\\ ", " ")
-    #     return m.group(m.lastindex)
 
-    # return [extract(m) for m in cmd_split_pattern.finditer(s)]
+
+def cmd_split_fast(s):
+    def extract(m):
+        if m.lastindex == 3:  # \ escape version. remove it
+            return m.group(m.lastindex).replace("\\ ", " ")
+        return m.group(m.lastindex)
+
+    return [extract(m) for m in cmd_split_pattern.finditer(s)]
 
 
 def read_until_empty_line(i: Iterator[str]) -> List[str]:
@@ -65,6 +78,7 @@ class XcodeLogParser(object):
     def __init__(self, _input: Iterator[str], _logFunc):
         self._input = _input
         self._log = _logFunc
+        self._pch_info = {}  # {condition => pch_file_path}
 
     def parse_compile_swift_module(self, line: str):
         if not line.startswith("CompileSwiftSources "):
@@ -80,9 +94,7 @@ class XcodeLogParser(object):
             return
 
         module = {}
-        directory = next(
-            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
-        )
+        directory = next((cmd_split(i)[1] for i in li if i.startswith("cd ")), None)
         if directory:
             module["directory"] = directory
         module["command"] = command
@@ -127,9 +139,7 @@ class XcodeLogParser(object):
         command = command[(command.index(" -- ") + len(" -- ")) :]
 
         module = {}
-        directory = next(
-            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
-        )
+        directory = next((cmd_split(i)[1] for i in li if i.startswith("cd ")), None)
         if directory:
             module["directory"] = directory
         module["command"] = command
@@ -158,17 +168,32 @@ class XcodeLogParser(object):
         info = cmd_split(line)
 
         module = {}
-        directory = next(
-            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
-        )
+        directory = next((cmd_split(i)[1] for i in li if i.startswith("cd ")), None)
         if directory:
             module["directory"] = directory
+        pch = self._pch_info.get(" ".join(info[3:]))
+        if pch is not None:
+            # when GCC_PRECOMPILE_PREFIX_HEADER=YES, pch is processed and command specify a invalid pch path, replace it to the local pch path
+            # same behavior like xcpretty
+            command = pch_capture.sub(f"-include {shlex.quote(pch)}", command)
+
         module["command"] = command
         module["file"] = info[2]
         module["output"] = info[1]
 
         echo(f"CompileC {info[2]}")
         return module
+
+    def parse_pch(self, line):
+        """
+        when GCC_PRECOMPILE_PREFIX_HEADER=YES, will has a ProcessPCH or ProcessPCH++ Section, which format is:
+        ProcessPCH[++] <output> <input> <condition>..
+        """
+        if not line.startswith("ProcessPCH"):
+            return
+        info = cmd_split(line)
+        self._pch_info[" ".join(info[3:])] = info[2]
+        echo(f"ProcessPCH {info[2]}")
 
     def parse(self):
         from inspect import iscoroutine
@@ -190,6 +215,7 @@ class XcodeLogParser(object):
             self.parse_swift_driver_module,
             self.parse_compile_swift_module,
             self.parse_c,
+            self.parse_pch,
         ]
         try:
             while True:

@@ -83,7 +83,7 @@ def extract_compile_log(path):
     for (type, value) in tokenizer(path):
         if type != TokenType.String: continue
         assert isinstance(value, str)
-        if not value.startswith(("CompileSwiftSources ", "SwiftDriver\\ Compilation ", "CompileC ")): continue
+        if not value.startswith(("CompileSwiftSources ", "SwiftDriver\\ Compilation ", "CompileC ", "ProcessPCH")): continue
         lines = value.splitlines()
         if len(lines) > 1:
             yield from iter(lines)
