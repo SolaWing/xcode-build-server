@@ -80,7 +80,9 @@ class XcodeLogParser(object):
             return
 
         module = {}
-        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        directory = next(
+            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
+        )
         if directory:
             module["directory"] = directory
         module["command"] = command
@@ -125,7 +127,9 @@ class XcodeLogParser(object):
         command = command[(command.index(" -- ") + len(" -- ")) :]
 
         module = {}
-        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        directory = next(
+            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
+        )
         if directory:
             module["directory"] = directory
         module["command"] = command
@@ -154,7 +158,9 @@ class XcodeLogParser(object):
         info = cmd_split(line)
 
         module = {}
-        directory = next((i[len("cd ") :] for i in li if i.startswith("cd ")), None)
+        directory = next(
+            (cmd_split(i)[1] for i in li if i.startswith("cd ")), None
+        )
         if directory:
             module["directory"] = directory
         module["command"] = command
