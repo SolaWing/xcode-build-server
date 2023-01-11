@@ -52,7 +52,7 @@ def cmd_split_fast(s):
 def read_until_empty_line(i: Iterator[str]) -> List[str]:
     li = []
     while True:
-        line = next(i)
+        line = next(i).rstrip("\r\n")
         if not line:
             return li
         li.append(line.strip())
