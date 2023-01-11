@@ -48,7 +48,7 @@ def server_api():
         rootUri = message["params"]["rootUri"]
         cache_path = os.path.join(
             os.path.expanduser("~/Library/Caches/xcode-build-server"),
-            rootUri.replace("/", "-"),
+            rootUri.replace("/", "-").replace("%", "X"),
         )
         rootPath = uri2filepath(rootUri)
         v = os.path.join(rootPath, ".compile")
@@ -72,7 +72,7 @@ def server_api():
                 "bspVersion": "2.0",
                 "rootUri": rootUri,
                 "capabilities": {
-                    "languageIds": ["swift", "objective-c", "c", "cpp", "objective-cpp"]
+                    "languageIds": ["c","cpp","objective-c","objective-cpp","swift"]
                 },
                 "data": {
                     # storepath是build生成的数据

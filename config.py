@@ -7,13 +7,7 @@ def dump_server_config(store=None):
         "name": "xcode build server",
         "version": "0.1",
         "bspVersion": "2.0",
-        "languages": [
-            "swift",
-            "objective-c",
-            "objective-cpp",
-            "c",
-            "cpp",
-        ],
+        "languages": ["c","cpp","objective-c","objective-cpp","swift"],
         "argv": [sys.argv[0]],
     }
     if store:
