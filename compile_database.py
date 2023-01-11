@@ -178,7 +178,7 @@ def commandForFile(filename, compileFile, global_store):
                 if not command:
                     continue
                 if files := i.get("files"):  # batch files, eg: swift module
-                    info.update((f.lower(), command) for f in files)
+                    info.update((os.path.realpath(f).lower(), command) for f in files)
                 if fileLists := i.get(
                     "fileLists"
                 ):  # file list store in a dedicated file
@@ -189,7 +189,7 @@ def commandForFile(filename, compileFile, global_store):
                         for f in getFileList(l, global_store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
-                    info[file.lower()] = command
+                    info[os.path.realpath(file).lower()] = command
     # xcode 12 escape =, but not recognized...
     return info.get(filename.lower(), "").replace("\\=", "=")
 
