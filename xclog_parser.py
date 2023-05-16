@@ -75,10 +75,14 @@ def extract_swift_files_from_swiftc(command):
 
 
 class XcodeLogParser(object):
+    swiftc_exec = "bin/swiftc "
     def __init__(self, _input: Iterator[str], _logFunc):
         self._input = _input
         self._log = _logFunc
         self._pch_info = {}  # {condition => pch_file_path}
+
+        if swift_exec := os.getenv("SWIFT_EXEC"):
+            self.swiftc_exec = os.path.basename(swift_exec) + " "
 
     def parse_compile_swift_module(self, line: str):
         if not line.startswith("CompileSwiftSources "):
@@ -89,8 +93,8 @@ class XcodeLogParser(object):
             return
 
         command = li[-1]  # type: str
-        if "bin/swiftc " not in command:
-            echo("Error: ================= Can't found swiftc\n" + command)
+        if self.swiftc_exec not in command:
+            echo(f"Error: ================= Can't found {self.swiftc_exec}\n" + command)
             return
 
         module = {}
@@ -132,8 +136,8 @@ class XcodeLogParser(object):
         ):
             return
 
-        if "bin/swiftc " not in command:
-            echo("Error: ================= Can't found swiftc\n" + command)
+        if self.swiftc_exec not in command:
+            echo(f"Error: ================= Can't found {self.swiftc_exec}\n" + command)
             return
 
         command = command[(command.index(" -- ") + len(" -- ")) :]
