@@ -31,9 +31,6 @@ pch_capture = re.compile(
     re.X,
 )
 
-clang_pattern = re.compile(r"^\s*\S*clang\S*")
-
-
 def cmd_split(s):
     # shlex.split is slow, use a simple version, only consider most case
     # in mine project test, custom regex is 2.54s, shlex.split is 4.9s
@@ -76,13 +73,12 @@ def extract_swift_files_from_swiftc(command):
 
 class XcodeLogParser(object):
     swiftc_exec = "bin/swiftc "
-    def __init__(self, _input: Iterator[str], _logFunc):
+    clang_exec = re.compile(r"^\s*\S*clang\S*")
+    def __init__(self, _input: Iterator[str], _logFunc, skip_validate_bin):
         self._input = _input
         self._log = _logFunc
+        self.skip_validate_bin = skip_validate_bin
         self._pch_info = {}  # {condition => pch_file_path}
-
-        if swift_exec := os.getenv("SWIFT_EXEC"):
-            self.swiftc_exec = os.path.basename(swift_exec) + " "
 
     def parse_compile_swift_module(self, line: str):
         if not line.startswith("CompileSwiftSources "):
@@ -93,7 +89,7 @@ class XcodeLogParser(object):
             return
 
         command = li[-1]  # type: str
-        if self.swiftc_exec not in command:
+        if not self.skip_validate_bin and self.swiftc_exec not in command:
             echo(f"Error: ================= Can't found {self.swiftc_exec}\n" + command)
             return
 
@@ -136,7 +132,7 @@ class XcodeLogParser(object):
         ):
             return
 
-        if self.swiftc_exec not in command:
+        if not self.skip_validate_bin and self.swiftc_exec not in command:
             echo(f"Error: ================= Can't found {self.swiftc_exec}\n" + command)
             return
 
@@ -165,7 +161,7 @@ class XcodeLogParser(object):
             return
 
         command = li[-1]
-        if not re.match(clang_pattern, command):
+        if not self.skip_validate_bin and not re.match(self.clang_exec, command):
             echo("Error: ========== Can't found clang\n" + command)
             return
 
@@ -326,6 +322,11 @@ def main(argv=sys.argv):
         "--sync",
         help="xcode build root path, use to extract newest xcactivitylog, eg: /Users/xxx/Library/Developer/Xcode/DerivedData/XXXProject-xxxhash/",
     )
+    parser.add_argument(
+        "--skip-validate-bin",
+        help="if skip validate the compile command which start with swiftc or clang, you should use this only when use custom binary",
+        action="store_true"
+    )
     a = parser.parse_args(argv[1:])
 
     if a.sync:
@@ -345,7 +346,7 @@ def main(argv=sys.argv):
     else:
         in_fd = open(a.input, "r")
 
-    parser = XcodeLogParser(in_fd, echo)
+    parser = XcodeLogParser(in_fd, echo, skip_validate_bin=a.skip_validate_bin)
     items = parser.parse()
 
     if a.output == "-":
