@@ -5,11 +5,11 @@ import os
 import sys
 
 level = os.environ.get("SOURCEKIT_LOGGING")
-if level is not None and int(level) >= 1:
+if ((level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1"):
     logging.getLogger().setLevel(logging.DEBUG)
     logging.debug(f"# xcode builde server with python {sys.version}]")
 
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 def main():
     if len(sys.argv) > 1:
         if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
