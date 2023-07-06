@@ -117,6 +117,8 @@ class XcodeLogParser(object):
         # SwiftDriver\ Compilation XXX normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'XXX' from project 'XXX')
         # cd ...
         # builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name XXX
+
+        # may appear both case, seems Compilation must show, driver may show..
         if not line.startswith("SwiftDriver"):
             return
 
@@ -270,6 +272,9 @@ def merge_database(items, database_path):
         for item in items:
             ident = identifier(item)
             if ident:
+                # swift-driver和swift-compile的重复看来是正常的，命令也一样。所以先兼容观察一段时间
+                # if ident in new_file_map:
+                #     echo(f"Error: duplicate compile for {ident}")
                 new_file_map[ident] = item
 
         dealed = set()
