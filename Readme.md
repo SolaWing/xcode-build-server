@@ -13,6 +13,10 @@ clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 `pbpaste | xcode-build-server parse`
 
+or
+
+`xcodebuild -workspace *.xcworkspace -scheme XXX -configuration Debug build | xcode-build-server parse`
+
 this should generate buildServer.json, which hook sourcekit-lsp to use the buildServer to provide compile infomation
 and a .compile hidden file, which provide actual compile command
 
