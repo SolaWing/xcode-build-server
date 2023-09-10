@@ -7,7 +7,6 @@ import sys
 from typing import Iterator, List
 import shlex
 
-
 def echo(s):
     print(s, file=sys.stderr)
 
@@ -339,10 +338,10 @@ def main(argv=sys.argv):
     a = parser.parse_args(argv[1:])
 
     if a.sync:
-        from xcactivitylog import newest_logpath, extract_compile_log
+        from xcactivitylog import newest_logpath, extract_compile_log, metapath_from_buildroot
 
         xcpath = newest_logpath(
-            os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist"),
+            metapath_from_buildroot(a.sync),
             scheme=a.scheme
         )
         if not xcpath:

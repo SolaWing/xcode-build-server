@@ -9,10 +9,10 @@ def usage(msg=None):
     if msg:
         print(msg)
     print(
-        f"""bind xcodeproj to buildServer.json. usage:
+        f"""bind xcworkspace and generate a buildServer.json to current dir.\nusage:
 
-    {sys.argv[0]} -workspace name.xcworkspace -scheme schemename
-    {sys.argv[0]} -project name.xcodeproj -scheme schemename
+    {sys.argv[0]} -workspace *.xcworkspace -scheme schemename
+    {sys.argv[0]} -project *.xcodeproj -scheme schemename
 
     see also `man xcodebuild` and xcodebuild -showBuildSettings
     """
@@ -21,7 +21,7 @@ def usage(msg=None):
 
 
 def main(argv=sys.argv):
-    if "-h" == argv[1] or "--help" == argv[1] or "-help" == argv[1] or len(argv) < 3:
+    if len(argv) < 3 or "-h" == argv[1] or "--help" == argv[1] or "-help" == argv[1]:
         usage()
 
     workspace = None
@@ -65,8 +65,8 @@ def main(argv=sys.argv):
 
         workspace = get_workspace()
 
-    cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' | grep "\bBUILD_DIR =" | head -1 | awk '{{print $3}}' | tr -d '"' """
-    build_dir = subprocess.check_output(cmd, universal_newlines=True)
+    cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' | grep "\\bBUILD_DIR =" | head -1 | awk '{{print $3}}' | tr -d '"' """
+    build_dir = subprocess.check_output(cmd, shell=True, universal_newlines=True)
     build_root = os.path.join(build_dir, "../..")
     build_root = os.path.normpath(build_root)
     print("find root:", build_root)

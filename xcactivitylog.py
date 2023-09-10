@@ -125,6 +125,9 @@ def newest_logpath(metapath: str, scheme=None):
         logs.sort(key=lambda v: v["timeStoppedRecording"], reverse=True)
         return os.path.join(os.path.dirname(metapath), logs[0]["fileName"])
 
+def metapath_from_buildroot(build_root):
+    return os.path.join(build_root, "Logs/Build/LogStoreManifest.plist")
+
 
 # def play():
 #     newest_logpath("LogStoreManifest.plist")

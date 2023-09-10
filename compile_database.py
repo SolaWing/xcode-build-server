@@ -34,10 +34,8 @@ def additionalFlags(flagsPath):
     return []
 
 
-headerDirsCacheDict = dict()
-
-
-def findAllHeaderDirectory(rootDirectory):
+def findAllHeaderDirectory(rootDirectory, store):
+    headerDirsCacheDict = store.setdefault("headerDirs", {})
     headerDirs = headerDirsCacheDict.get(rootDirectory)
     if headerDirs:
         return headerDirs
@@ -162,12 +160,12 @@ def findSwiftModuleRoot(filename):
     return (directory, flagFile, compileFile)
 
 
-def commandForFile(filename, compileFile, global_store):
-    store = global_store.setdefault("compile", {})
-    info = store.get(compileFile)
+def commandForFile(filename, compileFile, store):
+    compile_store = store.setdefault("compile", {})
+    info = compile_store.get(compileFile)
     if info is None:  # load {filename.lower: command} dict
         info = {}
-        store[compileFile] = info  # cache first to avoid re enter when error
+        compile_store[compileFile] = info  # cache first to avoid re enter when error
 
         import json
 
@@ -186,7 +184,7 @@ def commandForFile(filename, compileFile, global_store):
                         (f.strip().lower(), command)
                         for l in fileLists
                         if os.path.isfile(l)
-                        for f in getFileList(l, global_store.setdefault("filelist", {}))
+                        for f in getFileList(l, store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
                     info[os.path.realpath(file).lower()] = command
@@ -205,6 +203,8 @@ def GetFlagsInCompile(filename, compileFile, store):
 
 def GetFlags(filename: str, compileFile=None, **kwargs):
     """sourcekit entry function"""
+    # NOTE: use store to ensure toplevel storage. child store should be other name
+    # see store.setdefault to get child attributes
     store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
     global firstCompileFile
@@ -234,7 +234,7 @@ def InferFlagsForSwift(filename, store):
 
     if not final_flags and flagFile:
         final_flags = []
-        headers, frameworks = findAllHeaderDirectory(project_root)
+        headers, frameworks = findAllHeaderDirectory(project_root, store)
         for h in headers:
             final_flags += ["-Xcc", "-I" + h]
         for f in frameworks:
