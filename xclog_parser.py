@@ -328,6 +328,10 @@ def main(argv=sys.argv):
         help="xcode build root path, use to extract newest xcactivitylog, eg: /Users/xxx/Library/Developer/Xcode/DerivedData/XXXProject-xxxhash/",
     )
     parser.add_argument(
+        "--scheme",
+        help="scheme for extract from sync build root, default ignore this filter param",
+    )
+    parser.add_argument(
         "--skip-validate-bin",
         help="if skip validate the compile command which start with swiftc or clang, you should use this only when use custom binary",
         action="store_true"
@@ -338,8 +342,13 @@ def main(argv=sys.argv):
         from xcactivitylog import newest_logpath, extract_compile_log
 
         xcpath = newest_logpath(
-            os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist")
+            os.path.join(a.sync, "Logs/Build/LogStoreManifest.plist"),
+            scheme=a.scheme
         )
+        if not xcpath:
+            echo(f"no newest_logpath xcactivitylog at {a.sync}/Logs/Build/LogStoreManifest.plist")
+            return 1
+
         echo(f"extract_compile_log at {xcpath}")
         in_fd = extract_compile_log(xcpath)
     elif a.xcactivitylog:

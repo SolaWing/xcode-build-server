@@ -41,6 +41,7 @@ def optionsForFile(uri, compile_file=None):
 def server_api():
     """nest def is api, return by locals()"""
     compile_file = None  # 优先共用root compile_file里的编译信息
+    config_dict = None  # buildServer.json used as config dict
 
     def build_initialize(message):
         nonlocal compile_file
@@ -55,14 +56,29 @@ def server_api():
         if os.path.exists(v) and compile_file is None:
             compile_file = v
 
-        configPath = os.path.join(rootPath, "buildServer.json")
-        indexStorePath = None
-        if os.path.exists(configPath):
-            with open(configPath) as f:
-                indexStorePath = json.load(f).get("indexStorePath", None)
+        def get_indexStorePath():
+            configPath = os.path.join(rootPath, "buildServer.json")
 
+            if not os.path.exists(configPath):
+                return None
+            with open(configPath) as f:
+                nonlocal config_dict
+                config_dict = json.load(f)
+                indexStorePath: str|None = config_dict.get("indexStorePath", None)
+                if indexStorePath:
+                    return indexStorePath
+
+                indexStorePath = config_dict.get("build_root", None)
+                if indexStorePath:
+                    indexStorePath = os.path.join(
+                        indexStorePath, "Index.noindex/DataStore"
+                    )
+                    return indexStorePath
+
+        indexStorePath = get_indexStorePath()
         if not indexStorePath:
             indexStorePath = f"{cache_path}/indexStorePath"
+
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
@@ -72,7 +88,7 @@ def server_api():
                 "bspVersion": "2.0",
                 "rootUri": rootUri,
                 "capabilities": {
-                    "languageIds": ["c","cpp","objective-c","objective-cpp","swift"]
+                    "languageIds": ["c", "cpp", "objective-c", "objective-cpp", "swift"]
                 },
                 "data": {
                     # storepath是build生成的数据

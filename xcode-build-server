@@ -5,9 +5,10 @@ import os
 import sys
 
 level = os.environ.get("SOURCEKIT_LOGGING")
-if ((level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1"):
+if (level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1":
     logging.getLogger().setLevel(logging.DEBUG)
     logging.debug(f"# xcode builde server with python {sys.version}]")
+
 
 # logging.getLogger().setLevel(logging.DEBUG)
 def main():
@@ -23,20 +24,27 @@ def main():
                   """
             )
             exit(0)
-        if sys.argv[1] == "config":
-            from config import dump_server_config
-            dump_server_config()
-        elif sys.argv[1] == "parse":
-            import xclog_parser
 
+        def subcommand_argv():
             argv = sys.argv.copy()
             argv[0] = f"{argv[0]} {argv[1]}"
             del argv[1]
-            xclog_parser.main(argv)
-        elif sys.argv[1]  == "postaction":
-            sys.stdout.write(fr'''
+            return argv
+
+        if sys.argv[1] == "config":
+            import config
+
+            config.main(subcommand_argv())
+        elif sys.argv[1] == "parse":
+            import xclog_parser
+
+            xclog_parser.main(subcommand_argv())
+        elif sys.argv[1] == "postaction":
+            sys.stdout.write(
+                rf"""
             bash "{os.path.abspath(os.path.join(os.path.realpath(__file__), "..", "post_action.bash"))}"
-            ''')
+            """
+            )
     else:
         # else serve as build server, and wait json reqest
         import server
