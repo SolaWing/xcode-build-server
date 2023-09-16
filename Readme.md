@@ -5,6 +5,9 @@ apple's [sourcekit-lsp](https://github.com/apple/sourcekit-lsp) doesn't support 
 This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with my favorate editor.
 
 # Install
+
+this repo require Python3.9. it's the default version for newest macos.
+
 clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 # Usage

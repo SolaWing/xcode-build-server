@@ -3,9 +3,10 @@
 
 import os
 import re
+import shlex
 import sys
 from typing import Iterator, List
-import shlex
+
 
 def echo(s):
     print(s, file=sys.stderr)
@@ -29,6 +30,7 @@ pch_capture = re.compile(
 """,
     re.X,
 )
+
 
 def cmd_split(s):
     # shlex.split is slow, use a simple version, only consider most case
@@ -73,6 +75,7 @@ def extract_swift_files_from_swiftc(command):
 class XcodeLogParser(object):
     swiftc_exec = "bin/swiftc "
     clang_exec = re.compile(r"^\s*\S*clang\S*")
+
     def __init__(self, _input: Iterator[str], _logFunc, skip_validate_bin):
         self._input = _input
         self._log = _logFunc
@@ -298,7 +301,103 @@ def merge_database(items, database_path):
         f.truncate()
 
 
-def main(argv=sys.argv):
+def output_lock_path(output_path):
+    return output_path + ".lock"
+
+
+class OutputLockedError(FileExistsError):
+    pass
+
+
+def within_output_lock(output_path, action, timeout=180):
+    """raise OutputLockedError when already locked"""
+    # lock and trigger parse compile
+    if output_path is None or output_path == "-":
+        return action()
+
+    from misc import force_remove, get_mtime
+
+    lock_path = output_lock_path(output_path)
+    while True:
+        try:
+            from pathlib import Path
+
+            Path(lock_path).touch(exist_ok=False)
+            break
+        except FileExistsError as e:
+            from time import time
+
+            if time() - get_mtime(lock_path) >= timeout:
+                echo(f"{lock_path} locked so long! clear it and relock")
+                force_remove(lock_path)
+                # continue next try
+            else:
+                raise OutputLockedError(*e.args, e.filename)
+
+    try:
+        return action()
+    finally:
+        force_remove(lock_path)
+
+
+def _parse(args):
+    """args: same as main.parse args"""
+    if args.sync:
+        from xcactivitylog import (
+            newest_logpath,
+            extract_compile_log,
+            metapath_from_buildroot,
+        )
+
+        xcpath = newest_logpath(metapath_from_buildroot(args.sync), scheme=args.scheme)
+        if not xcpath:
+            echo(
+                f"no newest_logpath xcactivitylog at {args.sync}/Logs/Build/LogStoreManifest.plist"
+            )
+            return 1
+
+        echo(f"extract_compile_log at {xcpath}")
+        in_fd = extract_compile_log(xcpath)
+    elif args.xcactivitylog:
+        from xcactivitylog import extract_compile_log
+
+        in_fd = extract_compile_log(args.xcactivitylog)
+    elif args.input == "-":
+        in_fd = sys.stdin
+    else:
+        in_fd = open(args.input, "r")
+
+    parser = XcodeLogParser(in_fd, echo, skip_validate_bin=args.skip_validate_bin)
+    items = parser.parse()
+
+    if args.output == "-":
+        return dump_database(items, sys.stdout)
+    if args.output is None:
+        output = ".compile"
+
+        for index_store_path in parser.index_store_path:
+            echo(f"use index_store_path at {index_store_path}")
+            break
+        else:
+            index_store_path = None
+
+        from config import ServerConfig
+
+        c = ServerConfig.shared()
+        c.indexStorePath = index_store_path
+        c.kind = "manual"
+        c.save()
+    else:
+        output = args.output
+
+    if args.append and os.path.exists(output):
+        merge_database(items, output)
+    else:
+        # open will clear file
+        dump_database(items, open(output, "w"))
+
+
+def parse(argv):
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -333,55 +432,18 @@ def main(argv=sys.argv):
     parser.add_argument(
         "--skip-validate-bin",
         help="if skip validate the compile command which start with swiftc or clang, you should use this only when use custom binary",
-        action="store_true"
+        action="store_true",
     )
     a = parser.parse_args(argv[1:])
+    within_output_lock(a.output, lambda: _parse(a))
 
-    if a.sync:
-        from xcactivitylog import newest_logpath, extract_compile_log, metapath_from_buildroot
 
-        xcpath = newest_logpath(
-            metapath_from_buildroot(a.sync),
-            scheme=a.scheme
-        )
-        if not xcpath:
-            echo(f"no newest_logpath xcactivitylog at {a.sync}/Logs/Build/LogStoreManifest.plist")
-            return 1
-
-        echo(f"extract_compile_log at {xcpath}")
-        in_fd = extract_compile_log(xcpath)
-    elif a.xcactivitylog:
-        from xcactivitylog import extract_compile_log
-
-        in_fd = extract_compile_log(a.xcactivitylog)
-    elif a.input == "-":
-        in_fd = sys.stdin
-    else:
-        in_fd = open(a.input, "r")
-
-    parser = XcodeLogParser(in_fd, echo, skip_validate_bin=a.skip_validate_bin)
-    items = parser.parse()
-
-    if a.output == "-":
-        return dump_database(items, sys.stdout)
-    if a.output is None:
-        output = ".compile"
-        from config import dump_server_config
-
-        for index_store_path in parser.index_store_path:
-            echo(f"use index_store_path at {index_store_path}")
-            break
-        else:
-            index_store_path = None
-        dump_server_config(store=index_store_path)
-    else:
-        output = a.output
-
-    if a.append and os.path.exists(output):
-        merge_database(items, output)
-    else:
-        # open will clear file
-        dump_database(items, open(output, "w"))
+def main(argv=sys.argv):
+    try:
+        parse(argv)
+    except OutputLockedError as e:
+        echo(f"{e.filename} exists! parse already run")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

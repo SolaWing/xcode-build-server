@@ -1,14 +1,16 @@
-from typing import Optional
+import hashlib
 import json
 import logging
 import os
 import sys
-import urllib.parse
+from threading import Lock, Thread, main_thread
 import time
-from threading import Thread, main_thread, Lock
-from pathlib import Path
+from typing import Optional
+import urllib.parse
 
 from compile_database import GetFlags
+from config import ServerConfig
+from misc import force_remove, get_mtime
 
 
 def send(data):
@@ -29,15 +31,6 @@ def uri2filepath(uri):
     return urllib.parse.unquote(result.path)
 
 
-def get_mtime(path):
-    if os.path.exists(path):
-        try:
-            return os.stat(path).st_mtime
-        except FileNotFoundError:
-            pass
-    return 0
-
-
 def uptodate(target: str, srcs: list[str]):
     target_mtime = get_mtime(target)
     srcs_mtime = (get_mtime(src) for src in srcs)
@@ -45,44 +38,62 @@ def uptodate(target: str, srcs: list[str]):
 
 
 class State(object):
-    def __init__(self, root_path: str):
+    def __init__(self, root_path: str, cache_path):
+        """pass in path should be absolute and normalized"""
         self.root_path = root_path
-
-        # 优先共用root compile_file里的编译信息
-        self._compile_file = os.path.join(root_path, ".compile")
-        if os.path.exists(self._compile_file):
-            self.compile_file = self._compile_file
-        else:
-            self.compile_file = None
-
-        self.store = {}  # store use to save compile_datainfo
+        self.cache_path = cache_path
+        os.makedirs(cache_path, exist_ok=True)
 
         # buildServer.json used as config dict
-        self.config_dict: dict = {}
         config_path = os.path.join(root_path, "buildServer.json")
-        if os.path.exists(config_path):
-            with open(config_path) as f:
-                self.config_dict = json.load(f)
+        self.config = ServerConfig(config_path)
 
+        # opened files need to be notified when flags changed
         self.observed_uri = set()
+        # background thread to observe changes
         self.observed_thread: Optional[Thread] = None
+        # {path: mtime} cache. use to find changes
+        self.observed_info = {self.config.path: get_mtime(self.config.path)}
+
+        self.reinit_compile_info()
+        # NOTE:thread-safety: for state shared by main and background thread,
+        # can only changed in sync_compile_file
+
+    def get_compile_file(self, config):
+        # isolate auto generate compile file and manual compile_file
+        if config.kind == "auto":
+            hash = hashlib.md5(config.build_root.encode("utf-8")).hexdigest()
+            return os.path.join(self.cache_path, f"compile_file-{config.scheme}-{hash}")
+        # manual compile_file
+        return os.path.join(self.root_path, ".compile_file")
+
+    def reinit_compile_info(self):
+        """all the compile information may change in background"""
+
+        # store use to save compile_datainfo. it will be reload when config changes.
+        self.store = {}
+        self._compile_file = self.get_compile_file(self.config)
+        self.compile_file = (
+            self._compile_file if os.path.exists(self._compile_file) else None
+        )
+
+        # self._compile_file may change. need to init mtime to avoid trigger a change event
+        self.observed_info[self._compile_file] = get_mtime(self._compile_file)
 
     @property
     def indexStorePath(self) -> Optional[str]:
-        if not self.config_dict:
-            return None
+        if self.config.kind == "auto":
+            if not (root := self.config.build_root):
+                return None
+            return os.path.join(root, "Index.noindex/DataStore")
 
-        indexStorePath: Optional[str] = self.config_dict.get("indexStorePath", None)
-        if indexStorePath:
-            return indexStorePath
-
-        indexStorePath = self.config_dict.get("build_root", None)
-        if indexStorePath:
-            return os.path.join(indexStorePath, "Index.noindex/DataStore")
+        return self.config.indexStorePath
 
     @property
     def compile_lock_path(self):
-        return self._compile_file + ".lock"
+        from xclog_parser import output_lock_path
+
+        return output_lock_path(self._compile_file)
 
     def optionsForFile(self, uri):
         file_path = uri2filepath(uri)
@@ -135,29 +146,44 @@ class State(object):
             except Exception as e:
                 logging.warn(f"observe thread exit by exception: {e}")
 
-        self.observed_info = {
-            self._compile_file: get_mtime(self._compile_file)
-        }  # path => mtime
         self.locking_compile_file = False
 
         self.observed_thread = Thread(target=start)
         self.observed_thread.start()
 
     def tick(self):
+        if self.handle_build_server_config_change():
+            return
         if self.handle_compile_file_change():
             return
-        if not self.config_dict.get("build_root", None):
+        if self.config.kind != "auto":
             return
         if self.check_locking_compile_file():
             return
         if log_path := self.log_path_for_invalid_compile_file():
             self.trigger_parse(log_path)
 
+    def handle_build_server_config_change(self):
+        mtime = get_mtime(self.config.path)
+        if mtime > self.observed_info.get(self.config.path, 0):
+            self.observed_info[self.config.path] = mtime
+            # currently config update is useto change isolate compile_file path.
+            # so just check if the path changes
+            new_config = ServerConfig(self.config.path)
+            if self.get_compile_file(new_config) == self._compile_file:
+                return False
+
+            # compile_file did change.. so change it
+            def assign():
+                self.config = new_config
+
+            self.sync_compile_file(before=assign)
+            return True
+
     def handle_compile_file_change(self):
         compile_file_mtime = get_mtime(self._compile_file)
         if compile_file_mtime > self.observed_info.get(self._compile_file, 0):
             self.sync_compile_file()
-            self.observed_info[self._compile_file] = compile_file_mtime
             return True
 
     def check_locking_compile_file(self):
@@ -166,13 +192,10 @@ class State(object):
             if not mtime:
                 pass
             elif time.time() - mtime < 180:
-                return True
+                return True  # still wait
             else:
                 logging.warn("updating compile lock timeout! reset it")
-                try:
-                    os.remove(self.compile_lock_path)
-                except FileNotFoundError:  # already removed by other. skip this check
-                    return True
+                force_remove(self.compile_lock_path)
 
             self.locking_compile_file = False
 
@@ -181,7 +204,7 @@ class State(object):
 
         # TODO: xcodebuild not generate log until specify -resultBundlePath #
 
-        build_root = self.config_dict.get("build_root")
+        build_root = self.config.build_root
         assert isinstance(build_root, str)
 
         from xcactivitylog import metapath_from_buildroot, newest_logpath
@@ -201,9 +224,7 @@ class State(object):
         if compile_file_mtime > xcactivitylog_index_mtime:
             return
 
-        xcpath = newest_logpath(
-            xcactivitylog_index, self.config_dict.get("scheme", None)
-        )
+        xcpath = newest_logpath(xcactivitylog_index, self.config.scheme)
         if not (xcpath and (xcpath_mtime := update_check_time(xcpath))):
             return
         if compile_file_mtime > xcpath_mtime:
@@ -212,35 +233,25 @@ class State(object):
         return xcpath
 
     def trigger_parse(self, xcpath):
-        # lock and trigger parse compile
-        lock_path = self.compile_lock_path
+        # FIXME: ensure index_store_path from buildServer.json consistent with parsed .compile file..
+        from xclog_parser import parse, OutputLockedError
+
         try:
-            Path(lock_path).touch(exist_ok=False)
-        except FileExistsError:
+            parse(["xclog_parser", "-al", xcpath, "-o", self._compile_file])
+            self.handle_compile_file_change()
+        except OutputLockedError:
             self.locking_compile_file = True
-            return
 
-        try:
-            from xclog_parser import main
+    def sync_compile_file(self, before=None):
+        """update to newest compile info to main thread
 
-            # TODO: echo handle
-            args = ["xclog_parser", "-al", xcpath, "-o", self._compile_file]
-            main(args)
-        finally:
-            try:
-                os.remove(lock_path)
-            except FileNotFoundError:
-                pass
-
-        self.handle_compile_file_change()
-
-    def sync_compile_file(self):
-        """update to newest compile info"""
+        NOTE: called by observe thread, and block main thread,
+        to ensure when exit, all thread is in the runloop and no middle state.
+        """
         with lock:
-            self.store = {}
-            self.compile_file = (
-                self._compile_file if os.path.exists(self._compile_file) else None
-            )
+            if before:
+                before()
+            self.reinit_compile_info()
 
             # TODO: increment diff change and notify #
             for v in self.observed_uri:
@@ -256,22 +267,28 @@ def server_api():
 
     def build_initialize(message):
         rootUri = message["params"]["rootUri"]
+        root_path = os.path.abspath(os.path.expanduser(uri2filepath(rootUri)))
         cache_path = os.path.join(
             os.path.expanduser("~/Library/Caches/xcode-build-server"),
-            rootUri.replace("/", "-").replace("%", "X"),
+            root_path.replace("/", "-"),
         )
-        rootPath = uri2filepath(rootUri)
 
-        state = State(rootPath)
+        state = State(root_path, cache_path)
         global shared_state
         if shared_state:
             logging.warn("already initialized!!")
         else:
             shared_state = state
 
+        # FIXME: currently indexStorePath can't change dynamicly. have to restart server.
+        # though it rarely changes.. need to watch sourcekit-lsp implementation
         indexStorePath = state.indexStorePath
         if not indexStorePath:
             indexStorePath = f"{cache_path}/indexStorePath"
+
+        indexStorePathHash = hashlib.md5(indexStorePath.encode("utf-8")).hexdigest()
+        # database should unique to a indexStorePath
+        indexDatabasePath = f"{cache_path}/indexDatabasePath-{indexStorePathHash}"
 
         return {
             "jsonrpc": "2.0",
@@ -285,10 +302,7 @@ def server_api():
                     "languageIds": ["c", "cpp", "objective-c", "objective-cpp", "swift"]
                 },
                 "data": {
-                    # storepath是build生成的数据
-                    # db是相应的加速缓存
-                    # 需要根据rooturi拿到对应的indexstorepath的路径
-                    "indexDatabasePath": f"{cache_path}/indexDatabasePath",
+                    "indexDatabasePath": indexDatabasePath,
                     "indexStorePath": indexStorePath,
                 },
             },
@@ -366,7 +380,6 @@ def server_api():
         # empty response, ensure response before notification
         send({"jsonrpc": "2.0", "id": message["id"], "result": None})
 
-        # TODO: observe compile info change
         # is file save trigger a change and update index?
         action = message["params"]["action"]
         uri = message["params"]["uri"]

@@ -1,28 +1,37 @@
+from functools import cache, partial
+import glob
+import inspect
 import json
+import os
 import subprocess
 import sys
-import glob
-import os
 
 
-def usage(msg=None):
+def usage(name, msg=None):
     if msg:
         print(msg)
+
     print(
-        f"""bind xcworkspace and generate a buildServer.json to current dir.\nusage:
+        inspect.cleandoc(
+            f"""
+            usage: bind xcworkspace and generate a buildServer.json to current dir.
 
-    {sys.argv[0]} -workspace *.xcworkspace -scheme schemename
-    {sys.argv[0]} -project *.xcodeproj -scheme schemename
+            {name} -workspace *.xcworkspace -scheme <schemename>
+            {name} -project *.xcodeproj -scheme <schemename>
 
-    see also `man xcodebuild` and xcodebuild -showBuildSettings
-    """
+            workspace and project and be infered if only one in pwd. scheme must be specified.
+            see also `man xcodebuild` and xcodebuild -showBuildSettings
+            """
+        )
     )
     exit(1 if msg else 0)
 
 
 def main(argv=sys.argv):
+    _usage = partial(usage, argv[0])
+    # generate a config bind xcodeproj
     if len(argv) < 3 or "-h" == argv[1] or "--help" == argv[1] or "-help" == argv[1]:
-        usage()
+        _usage()
 
     workspace = None
     scheme = None
@@ -41,7 +50,7 @@ def main(argv=sys.argv):
         pass
 
     if scheme is None:
-        usage("you need to specify scheme!")
+        _usage("you need to specify scheme!")
 
     if workspace is None:
 
@@ -49,59 +58,96 @@ def main(argv=sys.argv):
             if project is None:
                 workspaces = glob.glob("*.xcworkspace")
                 if len(workspaces) > 1:
-                    usage("there are multiple xcworkspace in pwd, please specify one")
+                    _usage("there are multiple xcworkspace in pwd, please specify one")
                 if len(workspaces) == 1:
                     return workspaces[0]
 
                 projects = glob.glob("*.xcodeproj/*.xcworkspace")
                 if len(projects) > 1:
-                    usage("there are multiple xcodeproj in pwd, please specify one")
+                    _usage("there are multiple xcodeproj in pwd, please specify one")
                 if len(projects) == 1:
                     return projects[0]
 
-                usage("there no xcworkspace or xcodeproj in pwd, please specify one")
+                _usage("there no xcworkspace or xcodeproj in pwd, please specify one")
             else:
                 return os.path.join(project, "project.xcworkspace")
 
         workspace = get_workspace()
 
+    # find and record build_root for workspace and scheme
     cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' | grep "\\bBUILD_DIR =" | head -1 | awk '{{print $3}}' | tr -d '"' """
     build_dir = subprocess.check_output(cmd, shell=True, universal_newlines=True)
     build_root = os.path.join(build_dir, "../..")
-    build_root = os.path.normpath(build_root)
+    build_root = os.path.abspath(build_root)
     print("find root:", build_root)
 
-    additional_config = {
-        "workspace": workspace,
-        "build_root": build_root,
-    }
-    if scheme:
-        additional_config["scheme"] = scheme
-
-    dump_server_config(additional=additional_config)
-    print("writed buildServer.json")
-
-    import xclog_parser
-    args = ["xclog_parser", "-as", build_root, "-o", ".compile"]
-    if scheme:
-        args.append("--scheme")
-        args.append(scheme)
-    xclog_parser.main(args)
+    config = ServerConfig.shared()
+    config.workspace = os.path.abspath(os.path.expanduser(workspace))
+    config.build_root = build_root
+    config.scheme = scheme
+    config.kind = "auto"
+    config.save()
+    print("updated buildServer.json")
 
 
-def dump_server_config(store=None, additional=None):
-    """write buildServer.json to cwd"""
-    h = {
-        "name": "xcode build server",
-        "version": "0.2",
-        "bspVersion": "2.0",
-        "languages": ["c", "cpp", "objective-c", "objective-cpp", "swift"],
-        "argv": [sys.argv[0]],
-    }
-    if store:
-        h["indexStorePath"] = store
-    if additional:
-        h.update(additional)
+def _config_property(name, default=None, doc=None):
+    def fget(self):
+        return self.data.get(name, default)
 
-    with open("buildServer.json", "w") as f:
-        json.dump(h, f, indent=2)
+    def fset(self, value):
+        self.data[name] = value
+
+    def fdel(self):
+        del self.data[name]
+
+    return property(fget, fset, fdel, doc)
+
+
+class ServerConfig(object):
+    """this class control all user config. options:
+
+    kind: auto|manual  # where to find flags. default: manual
+    when kind=auto:
+        workspace: the bind workspace path
+        scheme: the bind scheme
+        build_root: the build_root find from xcworkspace and scheme
+    when kind=manual(or no kind):
+        indexStorePath?: the manual parsed index path. may not exists
+
+    user can change scheme by call `xcode-build-server config`,
+    or change to manual by call `xcode-build-server parse` directly.
+
+    after config change. server should change to new flags too..
+    """
+
+    # TODO: distinguish configuration and destination #
+
+    default_path = "buildServer.json"
+
+    kind = _config_property("kind", default="manual")
+    workspace = _config_property("workspace")
+    scheme = _config_property("scheme")
+    build_root = _config_property("build_root")
+    indexStorePath = _config_property("indexStorePath")
+
+    @cache
+    def shared():
+        return ServerConfig(ServerConfig.default_path)
+
+    def __init__(self, path):
+        self.path = os.path.abspath(path)
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                self.data = json.load(f)
+        else:
+            self.data = {
+                "name": "xcode build server",
+                "version": "0.2",
+                "bspVersion": "2.0",
+                "languages": ["c", "cpp", "objective-c", "objective-cpp", "swift"],
+                "argv": [sys.argv[0]],
+            }
+
+    def save(self):
+        with open(self.path, "w") as f:
+            json.dump(self.data, f, indent="\t")
