@@ -304,6 +304,7 @@ def merge_database(items, database_path):
 def output_lock_path(output_path):
     return output_path + ".lock"
 
+default_output_path = ".compile"
 
 class OutputLockedError(FileExistsError):
     pass
@@ -312,12 +313,12 @@ class OutputLockedError(FileExistsError):
 def within_output_lock(output_path, action, timeout=180):
     """raise OutputLockedError when already locked"""
     # lock and trigger parse compile
-    if output_path is None or output_path == "-":
+    if output_path == "-":
         return action()
 
     from misc import force_remove, get_mtime
 
-    lock_path = output_lock_path(output_path)
+    lock_path = output_lock_path(output_path or default_output_path)
     while True:
         try:
             from pathlib import Path
@@ -341,14 +342,14 @@ def within_output_lock(output_path, action, timeout=180):
 
 
 def _parse(args):
+    from xcactivitylog import (
+        newest_logpath,
+        extract_compile_log,
+        metapath_from_buildroot,
+    )
+
     """args: same as main.parse args"""
     if args.sync:
-        from xcactivitylog import (
-            newest_logpath,
-            extract_compile_log,
-            metapath_from_buildroot,
-        )
-
         xcpath = newest_logpath(metapath_from_buildroot(args.sync), scheme=args.scheme)
         if not xcpath:
             echo(
@@ -359,11 +360,11 @@ def _parse(args):
         echo(f"extract_compile_log at {xcpath}")
         in_fd = extract_compile_log(xcpath)
     elif args.xcactivitylog:
-        from xcactivitylog import extract_compile_log
-
         in_fd = extract_compile_log(args.xcactivitylog)
     elif args.input == "-":
         in_fd = sys.stdin
+    elif args.input.endswith(".xcactivitylog"):
+        in_fd = extract_compile_log(args.input)
     else:
         in_fd = open(args.input, "r")
 
@@ -372,8 +373,8 @@ def _parse(args):
 
     if args.output == "-":
         return dump_database(items, sys.stdout)
-    if args.output is None:
-        output = ".compile"
+    if not args.output:
+        output = default_output_path
 
         for index_store_path in parser.index_store_path:
             echo(f"use index_store_path at {index_store_path}")
@@ -427,7 +428,8 @@ def parse(argv):
     )
     parser.add_argument(
         "--scheme",
-        help="scheme for extract from sync build root, default ignore this filter param",
+        help=argparse.SUPPRESS
+        # help="scheme for extract from sync build root, default ignore this filter param",
     )
     parser.add_argument(
         "--skip-validate-bin",
