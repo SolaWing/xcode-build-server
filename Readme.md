@@ -11,36 +11,59 @@ this repo require Python3.9. it's the default version for newest macos.
 clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 # Usage
-## Manual Parse Xcodebuild log
-**xcode build, copy the build log, and then in Workspace root**, run:
 
-`pbpaste | xcode-build-server parse`
+choose one of the following usage.
 
-or
+### Bind to Xcode
+Go to your workspace directory and execute one of the following commands:
 
-`xcodebuild -workspace *.xcworkspace -scheme XXX -configuration Debug build | xcode-build-server parse`
+```bash
+# *.xcworkspace or *.xcodeproj should be unique. can be omit and will auto choose the unique workspace or project.
+xcode-build-server config -scheme <XXX> -workspace *.xcworkspace
+xcode-build-server config -scheme <XXX> -project *.xcodeproj
+```
 
-this should generate buildServer.json, which hook sourcekit-lsp to use the buildServer to provide compile infomation
-and a .compile hidden file, which provide actual compile command
+This will create or update the `buildServer.json` file, with a `kind: xcode` key, which instructs xcode-build-server to watch and use flags from the newest xcode build log.
 
-last, restart your language server, and it should work.
+If your compile info is outdated and something is not working properly, just build in xcode to refresh it.
 
-if your build environment changes(eg: add new files, switch sdk, debug/release, conditional macro, etc..) and language server work incorrectly, just repeat previous action to update compile info
+### Manual Parse Xcodebuild log
 
-PS: Recent Xcode may copy failed. if the case, use the export button to save log to file, and in workspace root run:
+If you are not building with Xcode, you can manually parse the build log to extract compile info using one of the following commands:
 
-`xcode-build-server parse <PATH/TO/Log>`
+```bash
+xcode-build-server parse <build_log_file>
+<command_to_generate_build_log> | xcode-build-server parse
+```
 
-## Sync Xcodebuild log
-xcode-build-server provider post-build-action script to auto parse newest log into .compile and generate buildServer.json.  
+this will parse the log, save compile info in a `.compile` file, and update `buildServer.json` with a `king: manual` key to instruct `xcode-build-server` to use the flags from the `.compile` file.
+
+`<build_log_file>` can be created by redirecting `xcodebuild build` output to a file, or exported from xcode's build log.
+
+`<cmd generate build log>` will usually be xcodebuild, or pbpaste if copy from xcode's build log. for example:
+
+```base
+xcodebuild -workspace *.xcworkspace -scheme <XXX> -configuration Debug build | xcode-build-server parse
+pbpaste | xcode-build-server parse
+```
+
+After completing these steps, restart your language server, and it should work as expected.
+
+if your build environment changes(eg: add new files, switch sdk, toggle debug/release, conditional macro, etc..) and your language server stops working, just repeat the previous steps to update the compile info.
+
+### [Deprecated] Sync Xcodebuild log
+> this usage is deprecated by `bind xcodeproj`, which just a command and won't pollute your xcodeproj's config.  
+> switch from this usage to `bind xcodeproj`, you'll need to delete the `post-build-action` first. Otherwise, bind may not work properly. since kind will change to manual by post-build-action.
+
+xcode-build-server provider `post-build-action` script to auto parse newest log into .compile and generate `buildServer.json`.  
 just add `xcode-build-server postaction | bash &` into script in **scheme -> Build -> Post-actions**. and script should choose provide build settings from target
 <img width="918" alt="图片" src="https://user-images.githubusercontent.com/3897953/178139213-cb655340-28f6-49f6-8e7d-666bb29e664f.png">
 
 after this, the compile info should auto generate when xcode build and no need further manual parse.
 
-## Index And Build
+## Indexing While Building
 [sourcekit-lsp](https://github.com/apple/sourcekit-lsp#indexing-while-building) use indexing while build.
-if you found find definition or references is not work correctly, just build it from xcode to update index
+if you found find definition or references is not work correctly, just build it to update index
 
 # More
 

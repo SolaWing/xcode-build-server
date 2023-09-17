@@ -28,7 +28,9 @@ def usage(name, msg=None):
 
 
 def main(argv=sys.argv):
-    _usage = partial(usage, argv[0])
+    it = iter(argv)
+    name = next(it, None)
+    _usage = partial(usage, name)
     # generate a config bind xcodeproj
     if len(argv) < 3 or "-h" == argv[1] or "--help" == argv[1] or "-help" == argv[1]:
         _usage()
@@ -36,18 +38,17 @@ def main(argv=sys.argv):
     workspace = None
     scheme = None
     project = None
-    it = iter(argv)
-    try:
-        while True:
-            arg = next(it)
-            if arg == "-workspace":
-                workspace = next(it)
-            elif arg == "-scheme":
-                scheme = next(it)
-            elif arg == "-project":
-                project = next(it)
-    except StopIteration:
-        pass
+    while (arg := next(it, None)) is not None:
+        if arg == "-workspace":
+            workspace = next(it)
+        elif arg == "-scheme":
+            scheme = next(it)
+        elif arg == "-project":
+            project = next(it)
+        elif "-h" == arg or "--help" == arg or "-help" == arg:
+            _usage()
+        else:
+            _usage(f"unknown arg {arg}")
 
     if scheme is None:
         _usage("you need to specify scheme!")
@@ -85,7 +86,7 @@ def main(argv=sys.argv):
     config.workspace = os.path.abspath(os.path.expanduser(workspace))
     config.build_root = build_root
     config.scheme = scheme
-    config.kind = "auto"
+    config.kind = "xcode"
     config.save()
     print("updated buildServer.json")
 
@@ -106,8 +107,8 @@ def _config_property(name, default=None, doc=None):
 class ServerConfig(object):
     """this class control all user config. options:
 
-    kind: auto|manual  # where to find flags. default: manual
-    when kind=auto:
+    kind: xcode|manual  # where to find flags. default: manual
+    when kind=xcode:
         workspace: the bind workspace path
         scheme: the bind scheme
         build_root: the build_root find from xcworkspace and scheme

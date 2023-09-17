@@ -60,8 +60,8 @@ class State(object):
         # can only changed in sync_compile_file
 
     def get_compile_file(self, config):
-        # isolate auto generate compile file and manual compile_file
-        if config.kind == "auto":
+        # isolate xcode generate compile file and manual compile_file
+        if config.kind == "xcode":
             hash = hashlib.md5(config.build_root.encode("utf-8")).hexdigest()
             return os.path.join(self.cache_path, f"compile_file-{config.scheme}-{hash}")
         # manual compile_file
@@ -82,7 +82,7 @@ class State(object):
 
     @property
     def indexStorePath(self) -> Optional[str]:
-        if self.config.kind == "auto":
+        if self.config.kind == "xcode":
             if not (root := self.config.build_root):
                 return None
             return os.path.join(root, "Index.noindex/DataStore")
@@ -156,7 +156,7 @@ class State(object):
             return
         if self.handle_compile_file_change():
             return
-        if self.config.kind != "auto":
+        if self.config.kind != "xcode":
             return
         if self.check_locking_compile_file():
             return

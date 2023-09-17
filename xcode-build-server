@@ -4,16 +4,13 @@ import logging
 import os
 import sys
 
-level = os.environ.get("SOURCEKIT_LOGGING")
-if (level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1":
-    logging.getLogger().setLevel(logging.DEBUG)
-else:
-    logging.getLogger().setLevel(logging.INFO)
-logging.info(f"# xcode builde server with python {sys.version}]")
-
-
-# logging.getLogger().setLevel(logging.DEBUG)
 def main():
+    level = os.environ.get("SOURCEKIT_LOGGING")
+    logger = logging.getLogger()
+    if (level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1":
+        logger.setLevel(logging.DEBUG)
+        logging.info(f"# xcode builde server with python {sys.version}]")
+
     if len(sys.argv) > 1:
         if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
             print(
@@ -50,6 +47,8 @@ def main():
     else:
         # else serve as build server, and wait json reqest
         import server
+        if logger.level > logging.INFO:
+            logger.setLevel(logging.INFO)
 
         server.serve()
 
