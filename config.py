@@ -40,11 +40,11 @@ def main(argv=sys.argv):
     project = None
     while (arg := next(it, None)) is not None:
         if arg == "-workspace":
-            workspace = next(it)
+            workspace = next(it, None)
         elif arg == "-scheme":
-            scheme = next(it)
+            scheme = next(it, None)
         elif arg == "-project":
-            project = next(it)
+            project = next(it, None)
         elif "-h" == arg or "--help" == arg or "-help" == arg:
             _usage()
         else:
