@@ -36,11 +36,11 @@ xcode-build-server parse <build_log_file>
 <command_to_generate_build_log> | xcode-build-server parse
 ```
 
-this will parse the log, save compile info in a `.compile` file, and update `buildServer.json` with a `king: manual` key to instruct `xcode-build-server` to use the flags from the `.compile` file.
+this will parse the log, save compile info in a `.compile` file, and update `buildServer.json` with a `kind: manual` key to instruct `xcode-build-server` to use the flags from the `.compile` file.
 
 `<build_log_file>` can be created by redirecting `xcodebuild build` output to a file, or exported from xcode's build log.
 
-`<cmd generate build log>` will usually be xcodebuild, or pbpaste if copy from xcode's build log. for example:
+`<cmd generate build log>` will usually be xcodebuild, or `pbpaste` if copy from xcode's build log. for example:
 
 ```base
 xcodebuild -workspace *.xcworkspace -scheme <XXX> -configuration Debug build | xcode-build-server parse
