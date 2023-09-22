@@ -23,9 +23,11 @@ xcode-build-server config -scheme <XXX> -workspace *.xcworkspace
 xcode-build-server config -scheme <XXX> -project *.xcodeproj
 ```
 
-This will create or update the `buildServer.json` file, with a `kind: xcode` key, which instructs xcode-build-server to watch and use flags from the newest xcode build log.
+This will create or update the `buildServer.json` file, with a `kind: xcode` key, which instructs xcode-build-server to watch and use compile flags from the newest xcode build log.
 
-If your compile info is outdated and something is not working properly, just build in xcode to refresh it.
+After this, you can open your file with sourcekit-lsp enabled, and it should works.
+
+If your compile info is outdated and something is not working properly, just build in xcode to refresh compile flags.
 
 ### Manual Parse Xcodebuild log
 
