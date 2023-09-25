@@ -109,6 +109,11 @@ class XcodeLogParser(object):
         echo(f"CompileSwiftModule {module['module_name']}")
         return module
 
+    def parse_swift_error(self, line: str):
+        if not line.startswith('/'): return
+        if not line.__contains__('error'): return
+        echo(line)
+
     def parse_swift_driver_module(self, line: str):
         # match cases 1:
         # SwiftDriver XXXDevEEUnitTest normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'XXXDevEEUnitTest' from project 'XXXDev')
@@ -217,6 +222,7 @@ class XcodeLogParser(object):
         # @return Future or Item, None to skip it
         matcher = [
             self.parse_swift_driver_module,
+            self.parse_swift_error,
             self.parse_compile_swift_module,
             self.parse_c,
             self.parse_pch,
