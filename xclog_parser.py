@@ -66,6 +66,19 @@ def extract_swift_files_from_swiftc(command):
     index_store_path = next(
         (args[i + 1] for (i, v) in enumerate(args) if v == "-index-store-path"), None
     )
+    # NOTE: when Release build, no -index-store-path param.. so need other way to infer -index-store-path
+    # seems xcode always trigger a debug index build. so use debug index as a backup
+    if not index_store_path:
+        # infer from other dir
+        for v in args:
+            if (
+                v.startswith("/")
+                and (i := v.find("/Build/Intermediates.noindex"))
+                and i > 0
+            ):
+                index_store_path = os.path.join(v[:i], "Index.noindex/DataStore")
+                break
+
     files = [os.path.realpath(a) for a in args if a.endswith(".swift")]
     # .SwiftFileList begin with a @ in command
     fileLists = [a[1:] for a in args if a.endswith(".SwiftFileList")]
@@ -304,7 +317,9 @@ def merge_database(items, database_path):
 def output_lock_path(output_path):
     return output_path + ".lock"
 
+
 default_output_path = ".compile"
+
 
 class OutputLockedError(FileExistsError):
     pass
