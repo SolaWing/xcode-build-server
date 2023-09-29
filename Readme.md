@@ -6,13 +6,13 @@ This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with 
 
 # Install
 
-this repo require Python3.9. it's the default version for newest macos.
+this repo require Python3.9. The latest macos already contains this tool.
 
-clone this repo, and just `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
+then just clone this repo, and `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 # Usage
 
-choose one of the following usage.
+choose one of the following usage. No matter which method you use, you need to ensure that the directory where `buildServer.json` is located is **the root directory** of lsp
 
 ### Bind to Xcode
 Go to your workspace directory and execute one of the following commands:
@@ -34,24 +34,29 @@ If your compile info is outdated and something is not working properly, just bui
 If you are not building with Xcode, you can manually parse the build log to extract compile info using one of the following commands:
 
 ```bash
-xcode-build-server parse <build_log_file>
-<command_to_generate_build_log> | xcode-build-server parse
+xcode-build-server parse [-a] <build_log_file>
+<command_to_generate_build_log> | xcode-build-server parse [-a]
 ```
 
 this will parse the log, save compile info in a `.compile` file, and update `buildServer.json` with a `kind: manual` key to instruct `xcode-build-server` to use the flags from the `.compile` file.
+
 
 `<build_log_file>` can be created by redirecting `xcodebuild build` output to a file, or exported from xcode's build log.
 
 `<cmd generate build log>` will usually be xcodebuild, or `pbpaste` if copy from xcode's build log. for example:
 
 ```base
-xcodebuild -workspace *.xcworkspace -scheme <XXX> -configuration Debug build | xcode-build-server parse
-pbpaste | xcode-build-server parse
+xcodebuild -workspace *.xcworkspace -scheme <XXX> -configuration Debug build | xcode-build-server parse [-a]
+pbpaste | xcode-build-server parse [-a]
 ```
+
+When running for the first time, **you need to ensure that the log is complete**, otherwise some files cannot obtain the correct flags.
 
 After completing these steps, restart your language server, and it should work as expected.
 
-if your build environment changes(eg: add new files, switch sdk, toggle debug/release, conditional macro, etc..) and your language server stops working, just repeat the previous steps to update the compile info.
+if your build environment changes(eg: add new files, switch sdk, toggle debug/release, conditional macro, etc..) and your language server stops working, just repeat the previous steps to update the compile info. In these incremental update cases, **you should make sure to use the `-a` flag**, which will only add new flags, and other irrelevant old flags will remain unchanged.
+
+if you use xcodebuild and want to see raw output, currently you can use the following commands: `xcodebuild ... | tee build.log; xcode-build-server parse -a build.log >/dev/null 2>&1`
 
 ### [Deprecated] Sync Xcodebuild log
 > this usage is deprecated by `bind xcodeproj`, which just a command and won't pollute your xcodeproj's config.  
