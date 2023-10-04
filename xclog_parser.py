@@ -76,10 +76,11 @@ class XcodeLogParser(object):
     swiftc_exec = "bin/swiftc "
     clang_exec = re.compile(r"^\s*\S*clang\S*")
 
-    def __init__(self, _input: Iterator[str], _logFunc, skip_validate_bin):
+    def __init__(self, _input: Iterator[str], _logFunc, skip_validate_bin, verbosity):
         self._input = _input
         self._log = _logFunc
         self.skip_validate_bin = skip_validate_bin
+        self.verbosity = verbosity
         self._pch_info = {}  # {condition => pch_file_path}
 
     def parse_compile_swift_module(self, line: str):
@@ -110,8 +111,12 @@ class XcodeLogParser(object):
         return module
 
     def parse_swift_error(self, line: str):
+        regexp_str = r''
         if not line.startswith('/'): return
-        if not line.__contains__('error'): return
+        if self.verbosity == 1: regexp_str = r'\:\s+(error)\:'
+        if self.verbosity == 2: regexp_str = r'\:\s+(error|warning)\:'
+        if self.verbosity == 3: regexp_str = r'\:\s+(error|warning|note)\:'
+        if not re.search(regexp_str, line): return
         echo(line)
 
     def parse_swift_driver_module(self, line: str):
@@ -374,7 +379,7 @@ def _parse(args):
     else:
         in_fd = open(args.input, "r")
 
-    parser = XcodeLogParser(in_fd, echo, skip_validate_bin=args.skip_validate_bin)
+    parser = XcodeLogParser(in_fd, echo, skip_validate_bin=args.skip_validate_bin, verbosity=args.verbose)
     items = parser.parse()
 
     if args.output == "-":
@@ -441,6 +446,13 @@ def parse(argv):
         "--skip-validate-bin",
         help="if skip validate the compile command which start with swiftc or clang, you should use this only when use custom binary",
         action="store_true",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action='count',
+        default=0,
+        help="Setup levels of verbosity of output (e.g., -v -vv -vvv).\n -v is for passing through errors,\n -vv is for passing through errors and warnings,\n -vvv is for passing through error, warnings and notes."
     )
     a = parser.parse_args(argv[1:])
     within_output_lock(a.output, lambda: _parse(a))
