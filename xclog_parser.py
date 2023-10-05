@@ -5,7 +5,7 @@ import os
 import re
 import shlex
 import sys
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 
 def echo(s):
@@ -111,12 +111,12 @@ class XcodeLogParser(object):
         return module
 
     def parse_swift_error(self, line: str):
-        regexp_str = r''
+        regexp_str: Optional[str] = None
         if not line.startswith('/'): return
         if self.verbosity == 1: regexp_str = r'\:\s+(error)\:'
         if self.verbosity == 2: regexp_str = r'\:\s+(error|warning)\:'
         if self.verbosity == 3: regexp_str = r'\:\s+(error|warning|note)\:'
-        if not re.search(regexp_str, line): return
+        if not (regexp_str and re.search(regexp_str, line)): return
         echo(line)
 
     def parse_swift_driver_module(self, line: str):
