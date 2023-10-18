@@ -93,9 +93,11 @@ def extract_compile_log(path):
             (
                 "CompileSwiftSources ",
                 # xcode will emit SwiftDriver and SwiftDriver\\ Compilation.
-                # in my test, when build fail, will only emit SwiftDriver. so use SwiftDriver for parse
+                # in my test, when build fail, will only emit SwiftDriver.
+                # but in some dependency case, only emit SwiftDriver\\ Compilation .
+                # so keep both. final will overwrite it
                 "SwiftDriver ",
-                # "SwiftDriver\\ Compilation ",
+                "SwiftDriver\\ Compilation ",
                 "CompileC ",
                 "ProcessPCH",
             )
