@@ -63,7 +63,10 @@ class State(object):
         # isolate xcode generate compile file and manual compile_file
         if config.kind == "xcode":
             hash = hashlib.md5(config.build_root.encode("utf-8")).hexdigest()
-            return os.path.join(self.cache_path, f"compile_file-{config.scheme}-{hash}")
+            name = ["compile_file", config.scheme, hash]
+            if config.skip_validate_bin:
+                name[0] = "compile_file1"
+            return os.path.join(self.cache_path, "-".join(name))
         # manual compile_file
         return os.path.join(self.root_path, ".compile_file")
 
@@ -237,7 +240,10 @@ class State(object):
         from xclog_parser import parse, OutputLockedError
 
         try:
-            parse(["xclog_parser", "-al", xcpath, "-o", self._compile_file])
+            cmd = ["xclog_parser", "-al", xcpath, "-o", self._compile_file]
+            if self.config.skip_validate_bin:
+                cmd.append("--skip-validate-bin")
+            parse(cmd)
             self.handle_compile_file_change()
         except OutputLockedError:
             self.locking_compile_file = True

@@ -21,6 +21,10 @@ def usage(name, msg=None):
 
             workspace and project and be infered if only one in pwd. scheme must be specified.
             see also `man xcodebuild` and xcodebuild -showBuildSettings
+
+            Other Options:
+
+            --skip-validate-bin: if skip validate bin for background log parser.
             """
         )
     )
@@ -38,6 +42,7 @@ def main(argv=sys.argv):
     workspace = None
     scheme = None
     project = None
+    skip_validate_bin = None
     while (arg := next(it, None)) is not None:
         if arg == "-workspace":
             workspace = next(it, None)
@@ -45,6 +50,8 @@ def main(argv=sys.argv):
             scheme = next(it, None)
         elif arg == "-project":
             project = next(it, None)
+        elif arg == "--skip-validate-bin":
+            skip_validate_bin = True
         elif "-h" == arg or "--help" == arg or "-help" == arg:
             _usage()
         else:
@@ -87,16 +94,23 @@ def main(argv=sys.argv):
     config.build_root = build_root
     config.scheme = scheme
     config.kind = "xcode"
+    config.skip_validate_bin = skip_validate_bin
     config.save()
     print("updated buildServer.json")
 
 
-def _config_property(name, default=None, doc=None):
+def _config_property(name, default=None, doc=None, delete_none=True):
+    """
+    default only affect getter, not write into data
+    """
     def fget(self):
         return self.data.get(name, default)
 
     def fset(self, value):
-        self.data[name] = value
+        if delete_none and value is None:
+            self.data.pop(name, None)
+        else:
+            self.data[name] = value
 
     def fdel(self):
         del self.data[name]
@@ -119,6 +133,9 @@ class ServerConfig(object):
     or change to manual by call `xcode-build-server parse` directly.
 
     after config change. server should change to new flags too..
+
+    other config:
+    skip_validate_bin: if true, will skip validate bin for background parser
     """
 
     # TODO: distinguish configuration and destination #
@@ -130,6 +147,8 @@ class ServerConfig(object):
     scheme = _config_property("scheme")
     build_root = _config_property("build_root")
     indexStorePath = _config_property("indexStorePath")
+
+    skip_validate_bin = _config_property("skip_validate_bin")
 
     @cache
     def shared():
