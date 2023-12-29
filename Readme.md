@@ -10,6 +10,14 @@ this repo require Python3.9. The latest macos already contains this tool.
 
 then just clone this repo, and `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
+here is script for quick install if your terminal cd to the dir you what save this repo:
+
+`git clone "git@github.com:SolaWing/xcode-build-server.git" && ln -s "$PWD"/xcode-build-server/xcode-build-server /usr/local/bin`
+
+or
+
+`git clone "https://github.com/SolaWing/xcode-build-server.git" && ln -s "$PWD"/xcode-build-server/xcode-build-server /usr/local/bin`
+
 # Usage
 
 choose one of the following usage. No matter which method you use, you need to ensure that the directory where `buildServer.json` is located is **the root directory** of lsp
@@ -19,8 +27,8 @@ Go to your workspace directory and execute one of the following commands:
 
 ```bash
 # *.xcworkspace or *.xcodeproj should be unique. can be omit and will auto choose the unique workspace or project.
-xcode-build-server config -scheme <XXX> -workspace *.xcworkspace
-xcode-build-server config -scheme <XXX> -project *.xcodeproj
+xcode-build-server config -workspace *.xcworkspace -scheme <XXX> 
+xcode-build-server config -project *.xcodeproj -scheme <XXX> 
 ```
 
 This will create or update the `buildServer.json` file, with a `kind: xcode` key, which instructs xcode-build-server to watch and use compile flags from the newest xcode build log.
