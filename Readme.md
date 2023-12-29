@@ -29,6 +29,11 @@ After this, you can open your file with sourcekit-lsp enabled, and it should wor
 
 If your compile info is outdated and something is not working properly, just build in xcode to refresh compile flags.
 
+> PS: xcodebuild can generate same build log as xcode, if you don't overwrite build dir and specify a -resultBundlePath. this way you don't have to open xcode to build. eg:
+```bash
+rm .bundle; xcodebuild -workspace *.xcworkspace -scheme <XXX> -destination 'generic/platform=iOS Simulator' -resultBundlePath .bundle build
+```
+
 ### Manual Parse Xcodebuild log
 
 If you are not building with Xcode, you can manually parse the build log to extract compile info using one of the following commands:
