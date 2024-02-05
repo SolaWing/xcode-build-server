@@ -107,14 +107,18 @@ def filterFlags(items, fileListCache):
             arg: str = next(it)
 
             # # -working-directory raise unsupported arg error
-            # if arg in {"-primary-file", "-o", "-serialize-diagnostics-path", "-working-directory", "-Xfrontend"}:
-            #     next(it)
-            #     continue
+            if arg in {
+                "-emit-localized-strings-path"
+                # "-primary-file", "-o", "-serialize-diagnostics-path", "-working-directory", "-Xfrontend"
+            }:
+                next(it)
+                continue
             # if arg.startswith("-emit"):
             #     if arg.endswith("-path"): next(it)
             #     continue
             if arg in {  # will make sourcekit report errors
-                "-use-frontend-parseable-output"
+                "-use-frontend-parseable-output",
+                "-emit-localized-strings"
                 # "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
                 # '-whole-module-optimization',
             }:
