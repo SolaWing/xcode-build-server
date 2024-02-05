@@ -4,6 +4,26 @@ import logging
 import os
 import sys
 
+def show_help():
+    print(
+        f"""usage:
+          {sys.argv[0]}: start a build server
+          {sys.argv[0]} config: bind xcworkspace and generate a buildServer.json to current dir
+          {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
+          {sys.argv[0]} postaction: dump a xcode post build bash script to sync flags to .compile(usage: `{sys.argv[0]} postaction | bash &` in xcode post build bash script)
+          {sys.argv[0]} [-h|--help]: show help
+          """
+    )
+    exit(0)
+
+def show_debug_help():
+    print(
+        f"""usage:
+          {sys.argv[0]} debug print-xclog <xcactivitylog_path>*: print xcactivitylog at path
+          """
+    )
+    exit(0)
+
 def main():
     level = os.environ.get("SOURCEKIT_LOGGING")
     logger = logging.getLogger()
@@ -12,17 +32,9 @@ def main():
         logging.info(f"# xcode builde server with python {sys.version}]")
 
     if len(sys.argv) > 1:
+
         if "-h" == sys.argv[1] or "--help" == sys.argv[1]:
-            print(
-                f"""usage:
-                  {sys.argv[0]}: start a build server
-                  {sys.argv[0]} config: bind xcworkspace and generate a buildServer.json to current dir
-                  {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
-                  {sys.argv[0]} postaction: dump a xcode post build bash script to sync flags to .compile(usage: `{sys.argv[0]} postaction | bash &` in xcode post build bash script)
-                  {sys.argv[0]} [-h|--help]: show help
-                  """
-            )
-            exit(0)
+            show_help()
 
         def subcommand_argv():
             argv = sys.argv.copy()
@@ -44,6 +56,18 @@ def main():
             bash "{os.path.abspath(os.path.join(os.path.realpath(__file__), "..", "post_action.bash"))}"
             """
             )
+        elif sys.argv[1] == "debug":
+
+            if sys.argv[2] == "print-xclog":
+                import xcactivitylog
+                for path in sys.argv[3:]:
+                    print(f"extract xcactivitylog at {path}")
+                    for l in xcactivitylog.extract_compile_log(path):
+                        print(l)
+            else:
+                show_debug_help()
+        else:
+            show_help()
     else:
         # else serve as build server, and wait json reqest
         import server
