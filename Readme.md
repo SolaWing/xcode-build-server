@@ -88,3 +88,10 @@ if you found find definition or references is not work correctly, just build it 
 # More
 
 current implementation is basicly work, but may have some rough edges. Please report issue if you have any problem. If you want to help, can check the open issue list. PR is always welcome.
+
+# Development
+
+## Release new version
+1. Create a new tag with `git tag -a v0.1.0 -m "release 0.1.0"`
+2. Push tag with `git push origin v0.1.0`
+3. GitHub action will create release
