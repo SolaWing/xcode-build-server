@@ -1,3 +1,6 @@
+.*
+!.gitignore
+!.github
 __pycache__/
 TODO.md
 tags
