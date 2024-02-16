@@ -18,6 +18,10 @@ or
 
 `git clone "https://github.com/SolaWing/xcode-build-server.git" && ln -s "$PWD"/xcode-build-server/xcode-build-server /usr/local/bin`
 
+or install from brew
+
+`brew install xcode-build-server`
+
 # Usage
 
 choose one of the following usage. No matter which method you use, you need to ensure that the directory where `buildServer.json` is located is **the root directory** of lsp
@@ -54,12 +58,13 @@ xcode-build-server parse [-a] <build_log_file>
 this will parse the log, save compile info in a `.compile` file, and update `buildServer.json` with a `kind: manual` key to instruct `xcode-build-server` to use the flags from the `.compile` file.
 
 
-`<build_log_file>` can be created by redirecting `xcodebuild build` output to a file, or exported from xcode's build log.
+`<build_log_file>` can be created by redirecting `xcodebuild build` output to a file, or exported from xcode's build log UI.
 
 `<cmd generate build log>` will usually be xcodebuild, or `pbpaste` if copy from xcode's build log. for example:
 
 ```base
 xcodebuild -workspace *.xcworkspace -scheme <XXX> -configuration Debug build | xcode-build-server parse [-a]
+
 pbpaste | xcode-build-server parse [-a]
 ```
 
