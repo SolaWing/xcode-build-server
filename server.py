@@ -76,9 +76,11 @@ class State(object):
         # store use to save compile_datainfo. it will be reload when config changes.
         self.store = {}
         self._compile_file = self.get_compile_file(self.config)
-        self.compile_file = (
-            self._compile_file if os.path.exists(self._compile_file) else None
-        )
+        if os.path.exists(self._compile_file):
+            self.compile_file = self._compile_file
+            logging.info(f"use flags from {self._compile_file}")
+        else:
+            self.compile_file = None
 
         # self._compile_file may change. need to init mtime to avoid trigger a change event
         self.observed_info[self._compile_file] = get_mtime(self._compile_file)
@@ -418,7 +420,7 @@ lock = Lock()
 
 
 def serve():
-    logging.info("Xcode Build Server Startup. Waiting Request...")
+    logging.info("Xcode Build Server Startup")
     while True:
         line = sys.stdin.readline()
         if len(line) == 0:
