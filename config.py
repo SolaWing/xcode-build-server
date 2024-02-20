@@ -160,13 +160,15 @@ class ServerConfig(object):
             with open(path, "r") as f:
                 self.data = json.load(f)
         else:
-            self.data = {
-                "name": "xcode build server",
-                "version": "0.2",
-                "bspVersion": "2.0",
-                "languages": ["c", "cpp", "objective-c", "objective-cpp", "swift"],
-                "argv": [sys.argv[0]],
-            }
+            self.data = {}
+
+        self.data.update({
+            "name": "xcode build server",
+            "version": "0.2",
+            "bspVersion": "2.0",
+            "languages": ["c", "cpp", "objective-c", "objective-cpp", "swift"],
+            "argv": [sys.argv[0]]
+        })
 
     def save(self):
         with open(self.path, "w") as f:

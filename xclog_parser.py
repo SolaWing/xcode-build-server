@@ -408,6 +408,7 @@ def _parse(args):
         else:
             index_store_path = None
 
+        # also dump buildServer.json when use default output
         from config import ServerConfig
 
         c = ServerConfig.shared()
