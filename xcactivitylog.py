@@ -14,6 +14,7 @@ class TokenType(Enum):
     Array = 4
     Class = 5
     Instance = 6
+    Json = 7
 
 
 def tokenizer(path):
@@ -68,6 +69,7 @@ def tokenizer(path):
         ord(b"("): int_handler(TokenType.Array),
         ord(b"%"): str_handler(TokenType.Class),
         ord(b"@"): int_handler(TokenType.Instance),
+        ord(b"*"): str_handler(TokenType.Json),
     }
 
     i = 0
@@ -86,6 +88,7 @@ def tokenizer(path):
 
 def extract_compile_log(path):
     for type, value in tokenizer(path):
+        # print(type, value)
         if type != TokenType.String:
             continue
         assert isinstance(value, str)
