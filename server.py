@@ -149,7 +149,7 @@ class State(object):
                     self.tick()
                     time.sleep(1)
             except Exception as e:
-                logging.warn(f"observe thread exit by exception: {e}")
+                logging.exception(f"observe thread exit by exception: {e}")
 
         self.locking_compile_file = False
 
