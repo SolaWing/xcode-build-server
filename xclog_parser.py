@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import logging
 import os
 import re
 import shlex
 import sys
 from typing import Iterator, List, Optional
 
+hooks_echo_to_log = False
 
-def echo(s):
-    print(s, file=sys.stderr)
+def echo(s: str):
+    if hooks_echo_to_log:
+        logging.debug(s)
+    else:
+        print(s, file=sys.stderr)
 
 
 cmd_split_pattern = re.compile(

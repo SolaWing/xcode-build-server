@@ -8,10 +8,15 @@ def show_help():
     print(
         f"""usage:
           {sys.argv[0]}: start a build server
+          {sys.argv[0]} serve: start a build server
           {sys.argv[0]} config: bind xcworkspace and generate a buildServer.json to current dir
           {sys.argv[0]} parse: xcode log subcommand. call parse -h to see more help
           {sys.argv[0]} postaction: dump a xcode post build bash script to sync flags to .compile(usage: `{sys.argv[0]} postaction | bash &` in xcode post build bash script)
           {sys.argv[0]} [-h|--help]: show help
+
+          SPECIAL ENVIRONMENT VARIABLE:
+            SOURCEKIT_LOGGING=3: enable detail debug log
+            XBS_LOGPATH: set log path. default is :stderr. use :null to disable log
           """
     )
     exit(0)
@@ -24,12 +29,34 @@ def show_debug_help():
     )
     exit(0)
 
-def main():
+def serve():
+    import server
+    server.serve()
+
+def setup_root_logger():
     level = os.environ.get("SOURCEKIT_LOGGING")
-    logger = logging.getLogger()
-    if (level is not None and int(level) >= 1) or os.environ.get("XBSDEBUG") == "1":
-        logger.setLevel(logging.DEBUG)
+    xbs_debug = ((level is not None and int(level) >= 1) or os.environ.get("XBS_DEBUG") == "1"
+        or os.environ.get("XBSDEBUG") == "1") # compatible, remove in future
+    level = logging.DEBUG if xbs_debug else logging.INFO
+
+    xbs_logpath = os.environ.get("XBS_LOGPATH")
+
+    if xbs_logpath:
+        if xbs_logpath == ":null":
+            logging.basicConfig(handlers=[logging.NullHandler()], level=level)
+        elif xbs_logpath == ":stderr":
+            logging.basicConfig(stream=sys.stderr, level=level)
+        else:
+            logging.basicConfig(filename=xbs_logpath, level=level)
+    else:
+        logging.basicConfig(stream=sys.stderr, level=level)
+
+    if xbs_debug:
         logging.info(f"# xcode builde server with python {sys.version}]")
+
+
+def main():
+    setup_root_logger()
 
     if len(sys.argv) > 1:
 
@@ -56,6 +83,8 @@ def main():
             bash "{os.path.abspath(os.path.join(os.path.realpath(__file__), "..", "post_action.bash"))}"
             """
             )
+        elif sys.argv[1] == "serve":
+            serve()
         elif sys.argv[1] == "debug":
 
             if sys.argv[2] == "print-xclog":
@@ -70,13 +99,10 @@ def main():
             show_help()
     else:
         # else serve as build server, and wait json reqest
-        import server
-        if logger.level > logging.INFO:
-            logger.setLevel(logging.INFO)
-
-        server.serve()
+        serve()
 
 
 if __name__ == "__main__":
+    # print(sys.path)
     # sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     main()

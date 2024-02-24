@@ -239,6 +239,9 @@ class State(object):
 
     def trigger_parse(self, xcpath):
         # FIXME: ensure index_store_path from buildServer.json consistent with parsed .compile file..
+        import xclog_parser
+        xclog_parser.hooks_echo_to_log = True
+
         from xclog_parser import parse, OutputLockedError
 
         try:
