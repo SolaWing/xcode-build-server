@@ -231,7 +231,7 @@ def InferFlagsForSwift(filename, store):
     """try infer flags by convention and workspace files"""
     global firstCompileFile
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
-    logging.debug(f"root: {project_root}, {compileFile}")
+    logging.debug(f"infer root: {project_root}, {compileFile}")
     if firstCompileFile is None:
         firstCompileFile = compileFile
     final_flags = GetFlagsInCompile(filename, compileFile, store)

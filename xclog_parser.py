@@ -12,7 +12,7 @@ hooks_echo_to_log = False
 
 def echo(s: str):
     if hooks_echo_to_log:
-        logging.debug(s)
+        logging.getLogger("parser").debug(s)
     else:
         print(s, file=sys.stderr)
 

@@ -52,7 +52,7 @@ def setup_root_logger():
         logging.basicConfig(stream=sys.stderr, level=level)
 
     if xbs_debug:
-        logging.info(f"# xcode builde server with python {sys.version}]")
+        logging.info(f"# xcode build server with python {sys.version}]")
 
 
 def main():

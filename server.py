@@ -12,10 +12,11 @@ from compile_database import GetFlags
 from config import ServerConfig
 from misc import force_remove, get_mtime
 
+logger = logging.getLogger(__name__)
 
 def send(data):
     data_str = json.dumps(data)
-    logging.debug("Res <-- %s", data_str)
+    logger.debug("Res <-- %s", data_str)
     try:
         sys.stdout.write(f"Content-Length: {len(data_str)}\r\n\r\n{data_str}")
         sys.stdout.flush()
@@ -78,7 +79,7 @@ class State(object):
         self._compile_file = self.get_compile_file(self.config)
         if os.path.exists(self._compile_file):
             self.compile_file = self._compile_file
-            logging.info(f"use flags from {self._compile_file}")
+            logger.info(f"use flags from {self._compile_file}")
         else:
             self.compile_file = None
 
@@ -127,7 +128,7 @@ class State(object):
             send(notification)
             return True
         except ValueError as e:  # may have other type change register, like target
-            logging.debug(e)
+            logger.debug(e)
 
     def shutdown(self):
         self.observed_thread = None  # release to end in subthread
@@ -136,7 +137,7 @@ class State(object):
 
     def start_observe_changes(self):
         if self.observed_thread:
-            logging.warn("already observing!!")
+            logger.warn("already observing!!")
             return
 
         def start():
@@ -149,7 +150,7 @@ class State(object):
                     self.tick()
                     time.sleep(1)
             except Exception as e:
-                logging.exception(f"observe thread exit by exception: {e}")
+                logger.exception(f"observe thread exit by exception: {e}")
 
         self.locking_compile_file = False
 
@@ -199,7 +200,7 @@ class State(object):
             elif time.time() - mtime < 180:
                 return True  # still wait
             else:
-                logging.warn("updating compile lock timeout! reset it")
+                logger.warn("updating compile lock timeout! reset it")
                 force_remove(self.compile_lock_path)
 
             self.locking_compile_file = False
@@ -287,7 +288,7 @@ def server_api():
         state = State(root_path, cache_path)
         global shared_state
         if shared_state:
-            logging.warn("already initialized!!")
+            logger.warn("already initialized!!")
         else:
             shared_state = state
 
@@ -423,7 +424,7 @@ lock = Lock()
 
 
 def serve():
-    logging.info("Xcode Build Server Startup")
+    logger.info("Xcode Build Server Startup")
     while True:
         line = sys.stdin.readline()
         if len(line) == 0:
@@ -434,7 +435,7 @@ def serve():
         sys.stdin.readline()
         raw = sys.stdin.read(length)
         message = json.loads(raw)
-        logging.debug("Req --> " + raw)
+        logger.debug("Req --> " + raw)
 
         with lock:
             response = None
