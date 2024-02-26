@@ -22,6 +22,10 @@ or install from brew
 
 `brew install xcode-build-server`
 
+or install from [Macports](https://github.com/macports/macports-ports/blob/master/devel/xcode-build-server/Portfile):
+
+`sudo port install xcode-build-server`
+
 # Usage
 
 choose one of the following usage. No matter which method you use, you need to ensure that the directory where `buildServer.json` is located is **the root directory** of lsp
