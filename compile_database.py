@@ -6,8 +6,6 @@ from typing import List
 
 
 globalStore = {}
-# inherit compile file, for situation crossing root dir
-firstCompileFile = None
 
 cmd_split_pattern = re.compile(
     r"""
@@ -214,29 +212,20 @@ def GetFlags(filename: str, compileFile=None, **kwargs):
     # see store.setdefault to get child attributes
     store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
-    global firstCompileFile
+
     if compileFile:
-        if firstCompileFile is None:
-            firstCompileFile = compileFile
         if final_flags := GetFlagsInCompile(filename, compileFile, store):
             return {"flags": final_flags, "do_cache": True}
 
-    if firstCompileFile and firstCompileFile != compileFile:
-        if final_flags := GetFlagsInCompile(filename, firstCompileFile, store):
-            return {"flags": final_flags, "do_cache": True}
-
     if filename.endswith(".swift"):
-        return InferFlagsForSwift(filename, store)
+        return InferFlagsForSwift(filename, compileFile, store)
     return {"flags": [], "do_cache": False}
 
 
-def InferFlagsForSwift(filename, store):
+def InferFlagsForSwift(filename, compileFile, store):
     """try infer flags by convention and workspace files"""
-    global firstCompileFile
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
     logging.debug(f"infer root: {project_root}, {compileFile}")
-    if firstCompileFile is None:
-        firstCompileFile = compileFile
     final_flags = GetFlagsInCompile(filename, compileFile, store)
 
     if not final_flags and flagFile:
