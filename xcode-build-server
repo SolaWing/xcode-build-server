@@ -16,7 +16,7 @@ def show_help():
 
           SPECIAL ENVIRONMENT VARIABLE:
             SOURCEKIT_LOGGING=3: enable detail debug log
-            XBS_LOGPATH: set log path. default is :stderr. use :null to disable log
+            XBS_LOGPATH: set log path. default is `:stderr`. use `:null` to disable log
           """
     )
     exit(0)

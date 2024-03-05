@@ -8,11 +8,17 @@ import time
 from typing import Optional
 import urllib.parse
 
-from compile_database import GetFlags
-from config import ServerConfig
+from compile_database import (
+    GetFlags,
+    InferFlagsForSwift,
+    filekey,
+    newfileForCompileFile,
+)
+from config import ServerConfig, env
 from misc import force_remove, get_mtime
 
 logger = logging.getLogger(__name__)
+
 
 def send(data):
     data_str = json.dumps(data)
@@ -30,6 +36,11 @@ def uri2filepath(uri):
     if result.scheme != "file":
         raise ValueError(uri)
     return urllib.parse.unquote(result.path)
+
+
+def uri2realpath(uri):
+    path = uri2filepath(uri)
+    return os.path.realpath(path)
 
 
 def uptodate(target: str, srcs: list[str]):
@@ -53,12 +64,14 @@ class State(object):
         self.observed_uri = set()
         # background thread to observe changes
         self.observed_thread: Optional[Thread] = None
+
         # {path: mtime} cache. use to find changes
         self.observed_info = {self.config.path: get_mtime(self.config.path)}
 
         self.reinit_compile_info()
-        # NOTE:thread-safety: for state shared by main and background thread,
-        # can only changed in sync_compile_file
+        # NOTE:thread-safety: for state shared by main and background watch thread,
+        # can only changed in sync_compile_file, which block all thread and no one access it.
+        # other time, the shared state is readonly and safe..
 
     def get_compile_file(self, config):
         # isolate xcode generate compile file and manual compile_file
@@ -75,7 +88,7 @@ class State(object):
         """all the compile information may change in background"""
 
         # store use to save compile_datainfo. it will be reload when config changes.
-        self.store = {} # main-thread
+        self.store = {}  # main-thread
         self._compile_file = self.get_compile_file(self.config)
         if os.path.exists(self._compile_file):
             self.compile_file = self._compile_file
@@ -101,11 +114,40 @@ class State(object):
 
         return output_lock_path(self._compile_file)
 
+    def register_uri(self, uri):
+        self.observed_uri.add(uri)
+
+        file_path = uri2realpath(uri)
+        flags = GetFlags(file_path, self.compile_file, store=self.store)
+
+        if not flags and env.new_file:
+            if filekeys := newfileForCompileFile(
+                file_path, self.compile_file, store=self.store
+            ):
+                # add new file success, update options for module files
+                for v in self.observed_uri:
+                    if filekey(uri2filepath(v)) in filekeys:
+                        self.notify_option_changed(v)
+                return
+
+        if not flags and file_path.endswith(".swift"):
+            flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
+
+        self._notify_option_changed(uri, self.optionsForFlags(flags))
+
+    def unregister_uri(self, uri):
+        self.observed_uri.remove(uri)
+
     def optionsForFile(self, uri):
-        file_path = uri2filepath(uri)
-        flags = GetFlags(file_path, self.compile_file, store=self.store)[
-            "flags"
-        ]  # type: list
+        file_path = uri2realpath(uri)
+        flags = GetFlags(file_path, self.compile_file, store=self.store)
+        if not flags and file_path.endswith(".swift"):
+            flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
+        return self.optionsForFlags(flags)
+
+    def optionsForFlags(self, flags):
+        if flags is None:
+            return None
         try:
             workdir = flags[flags.index("-working-directory") + 1]
         except (IndexError, ValueError):
@@ -116,19 +158,22 @@ class State(object):
         }
 
     def notify_option_changed(self, uri):
-        try:
-            notification = {
-                "jsonrpc": "2.0",
-                "method": "build/sourceKitOptionsChanged",
-                "params": {
-                    "uri": uri,
-                    "updatedOptions": self.optionsForFile(uri),
-                },
-            }
-            send(notification)
-            return True
-        except ValueError as e:  # may have other type change register, like target
-            logger.debug(e)
+        # no clear options?
+        self._notify_option_changed(uri, self.optionsForFile(uri))
+
+    def _notify_option_changed(self, uri, options):
+        # empty options is nouse and lsp will stop working.., at least there should has a infer flags..
+        if options is None:
+            return
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "build/sourceKitOptionsChanged",
+            "params": {
+                "uri": uri,
+                "updatedOptions": options,
+            },
+        }
+        send(notification)
 
     def shutdown(self):
         self.observed_thread = None  # release to end in subthread
@@ -241,6 +286,7 @@ class State(object):
     def trigger_parse(self, xcpath):
         # FIXME: ensure index_store_path from buildServer.json consistent with parsed .compile file..
         import xclog_parser
+
         xclog_parser.hooks_echo_to_log = True
 
         from xclog_parser import parse, OutputLockedError
@@ -397,10 +443,9 @@ def server_api():
         action = message["params"]["action"]
         uri = message["params"]["uri"]
         if action == "register":
-            if shared_state.notify_option_changed(uri):
-                shared_state.observed_uri.add(uri)
+            shared_state.register_uri(uri)
         elif action == "unregister":
-            shared_state.observed_uri.remove(uri)
+            shared_state.unregister_uri(uri)
 
     def textDocument_sourceKitOptions(message):
         return {
@@ -438,14 +483,9 @@ def serve():
         message = json.loads(raw)
         logger.debug("Req --> " + raw)
 
-        with lock:
-            response = None
-            handler = dispatch.get(message["method"].replace("/", "_"))
-            if handler:
-                response = handler(message)
-            # ignore other notifications
-            elif "id" in message:
-                response = {
+        def default_response():
+            if "id" in message:
+                return {
                     "jsonrpc": "2.0",
                     "id": message["id"],
                     "error": {
@@ -454,5 +494,17 @@ def serve():
                     },
                 }
 
+        with lock:
+            response = None
+            handler = dispatch.get(message["method"].replace("/", "_"))
+            if handler:
+                try:
+                    response = handler(message)
+                except Exception as e:
+                    logger.exception(f"handle message error: {e}")
+                    response = default_response()
+            else:
+                # ignore other notifications
+                response = default_response()
             if response:
                 send(response)

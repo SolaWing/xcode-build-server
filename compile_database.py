@@ -165,6 +165,8 @@ def findSwiftModuleRoot(filename):
 
     return (directory, flagFile, compileFile)
 
+def filekey(filename):
+    return os.path.realpath(filename).lower()
 
 class CompileFileInfo:
     def __init__(self, compileFile, store):
@@ -182,25 +184,23 @@ class CompileFileInfo:
                 if not command:
                     continue
                 if files := i.get("files"):  # batch files, eg: swift module
-                    self.file_info.update((self.key(f), command) for f in files)
+                    self.file_info.update((filekey(f), command) for f in files)
                 if fileLists := i.get(
                     "fileLists"
                 ):  # file list store in a dedicated file
                     self.file_info.update(
-                        (self.key(f), command)
+                        (filekey(f), command)
                         for l in fileLists
                         if os.path.isfile(l)
                         for f in getFileArgs(l, store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
-                    self.file_info[self.key(file)] = command
+                    self.file_info[filekey(file)] = command
 
     def get(self, filename):
         if command := self.file_info.get(filename.lower()):
+            # xcode 12 escape =, but not recognized...
             return command.replace("\\=", "=")
-
-    def key(self, filename):
-        return os.path.realpath(filename).lower()
 
     def groupby_dir(self) -> dict[str, set[str]]:
         if self.dir_info is None:  # lazy index dir and cmd
@@ -213,6 +213,7 @@ class CompileFileInfo:
         return self.dir_info
 
     # hack new file into current compile file
+    # return: set of filekey for match for file. or None if new_file can't be infered
     def new_file(self, filename):
         # Currently only processing swift files
         if not filename.endswith(".swift"):
@@ -221,7 +222,7 @@ class CompileFileInfo:
         filename = os.path.realpath(filename)
         filename_key = filename.lower()
         if filename_key in self.file_info:
-            return  # already handled
+            return {filename_key}  # already handled
 
         dir = os.path.dirname(filename_key)
         samefile = next(
@@ -234,7 +235,7 @@ class CompileFileInfo:
         cmd_match = next(cmd_split_pattern.finditer(command), None)
         if not cmd_match:
             return
-        assert self.cmd_info
+        assert self.cmd_info # init in groupby_dir
         module_files = self.cmd_info.pop(command)
         index = cmd_match.end()
         from shlex import quote
@@ -247,12 +248,22 @@ class CompileFileInfo:
         self.cmd_info[command] = module_files
         for v in module_files:
             self.file_info[v] = command
+        return module_files
 
+def newfileForCompileFile(filename, compileFile, store) -> set[str] | None:
+    info = compileFileInfoFromStore(compileFile, store)
+    return info.new_file(filename)
 
 def commandForFile(filename, compileFile, store: Dict):
     """
     command = store["compile"][<compileFile>][filename]
+    > will lazy build compile_file info
     """
+    info = compileFileInfoFromStore(compileFile, store)
+    return info.get(filename)
+
+
+def compileFileInfoFromStore(compileFile, store: Dict):
     compile_store = store.setdefault("compile", {})
     info: CompileFileInfo = compile_store.get(compileFile)
     if info is None:  # load {filename.lower: command} dict
@@ -263,13 +274,11 @@ def commandForFile(filename, compileFile, store: Dict):
         # if has additional new_file, generate command for it
         for file in store.get("additional_files") or ():
             info.new_file(file)
-
-    # xcode 12 escape =, but not recognized...
-    return info.get(filename)
+    return info
 
 
 def GetFlagsInCompile(filename, compileFile, store):
-    """read flags from compileFile"""
+    """read flags from compileFile. filename should be realpath"""
     if compileFile:
         command = commandForFile(filename, compileFile, store)
         if command:
@@ -277,20 +286,17 @@ def GetFlagsInCompile(filename, compileFile, store):
             return list(filterFlags(flags, store.setdefault("filelist", {})))
 
 
-def GetFlags(filename: str, compileFile=None, **kwargs):
+def GetFlags(filename: str, compileFile=None, store=None):
     """sourcekit entry function"""
     # NOTE: use store to ensure toplevel storage. child store should be other name
     # see store.setdefault to get all child attributes
-    store = kwargs.get("store", globalStore)
-    filename = os.path.realpath(filename)
+    if not store:
+        store = globalStore
 
     if compileFile:
         if final_flags := GetFlagsInCompile(filename, compileFile, store):
-            return {"flags": final_flags, "do_cache": True}
-
-    if filename.endswith(".swift"):
-        return InferFlagsForSwift(filename, compileFile, store)
-    return {"flags": [], "do_cache": False}
+            return final_flags
+    return None
 
 
 # TODO: c family infer flags #
@@ -330,4 +336,4 @@ def InferFlagsForSwift(filename, compileFile, store):
             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
         ]
 
-    return {"flags": final_flags, "do_cache": True}
+    return final_flags
