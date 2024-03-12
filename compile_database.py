@@ -84,20 +84,21 @@ def cmd_split(s):
     # return [extract(m) for m in cmd_split_pattern.finditer(s)]
 
 
-def readFileList(path):
+def readFileArgs(path):
     with open(path) as f:
-        return [os.path.realpath(i) for i in cmd_split(f.read())]
+        return cmd_split(f.read())
 
 
-def getFileList(path, cache) -> List[str]:
+# 以文件里的内容作为命令行参数，会进行shell分词展开
+def getFileArgs(path, cache) -> List[str]:
     files = cache.get(path)
     if files is None:
-        files = readFileList(path)
+        files = readFileArgs(path)
         cache[path] = files
     return files
 
 
-def filterFlags(items, fileListCache):
+def filterFlags(items, fileCache):
     """
     f: should return True to accept, return number to skip next number flags
     """
@@ -124,10 +125,12 @@ def filterFlags(items, fileListCache):
             }:
                 continue
             if arg == "-filelist":  # sourcekit dont support filelist, unfold it
-                yield from getFileList(next(it), fileListCache)
+                yield from getFileArgs(next(it), fileCache)
                 continue
-            if arg.startswith("@"):  # swift 5.1 filelist, unfold it
-                yield from getFileList(arg[1:], fileListCache)
+            if arg.startswith("@"):
+                # swift 5.1 filelist, unfold it
+                # xcode 15.3 clang extra args, unfold it
+                yield from getFileArgs(arg[1:], fileCache)
                 continue
             yield arg
     except StopIteration:
@@ -185,10 +188,10 @@ def commandForFile(filename, compileFile, store):
                     "fileLists"
                 ):  # file list store in a dedicated file
                     info.update(
-                        (f.strip().lower(), command)
+                        (os.path.realpath(f).lower(), command)
                         for l in fileLists
                         if os.path.isfile(l)
-                        for f in getFileList(l, store.setdefault("filelist", {}))
+                        for f in getFileArgs(l, store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
                     info[os.path.realpath(file).lower()] = command
