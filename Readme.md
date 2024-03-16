@@ -2,7 +2,7 @@
 
 apple's [sourcekit-lsp](https://github.com/apple/sourcekit-lsp) doesn't support xcode project. but I found it provide a [build server protocol](https://build-server-protocol.github.io/docs/specification.html) to integrate with other build system. this is why I created this repo.
 
-This repo aims to integrate xcode with sourcekit-lsp, so I can develop iOS with my favorate editor.
+This repo aims to integrate xcode with sourcekit-lsp, support all languages(swift, c, cpp, objc, objcpp) xcode supports, so I can develop iOS with my favorate editor.
 
 # Install
 
