@@ -70,9 +70,9 @@ def main():
             return argv
 
         if sys.argv[1] == "config":
-            import config
+            from config.cmd import main
 
-            config.main(subcommand_argv())
+            main(subcommand_argv())
         elif sys.argv[1] == "parse":
             import xclog_parser
 
