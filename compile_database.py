@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import subprocess
-from typing import List
+from typing import Dict, List
 
 
 globalStore = {}
@@ -164,16 +164,12 @@ def findSwiftModuleRoot(filename):
 
     return (directory, flagFile, compileFile)
 
+class CompileFileInfo:
+    def __init__(self, compileFile, store):
+        self.info = {}
 
-def commandForFile(filename, compileFile, store):
-    compile_store = store.setdefault("compile", {})
-    info = compile_store.get(compileFile)
-    if info is None:  # load {filename.lower: command} dict
-        info = {}
-        compile_store[compileFile] = info  # cache first to avoid re enter when error
-
+        # load compileFile into info
         import json
-
         with open(compileFile) as f:
             m: List[dict] = json.load(f)
             for i in m:
@@ -181,20 +177,36 @@ def commandForFile(filename, compileFile, store):
                 if not command:
                     continue
                 if files := i.get("files"):  # batch files, eg: swift module
-                    info.update((os.path.realpath(f).lower(), command) for f in files)
-                if fileLists := i.get(
-                    "fileLists"
-                ):  # file list store in a dedicated file
-                    info.update(
-                        (os.path.realpath(f).lower(), command)
-                        for l in fileLists
-                        if os.path.isfile(l)
+                    self.info.update((self.key(f), command) for f in files)
+                if fileLists := i.get("fileLists"):  # file list store in a dedicated file
+                    self.info.update(
+                        (self.key(f), command)
+                        for l in fileLists if os.path.isfile(l)
                         for f in getFileArgs(l, store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
-                    info[os.path.realpath(file).lower()] = command
+                    self.info[self.key(file)] = command
+
+    def get(self, filename):
+        if command := self.info.get(filename.lower()):
+            return command.replace("\\=", "=")
+
+    def key(self, filename):
+        return os.path.realpath(filename).lower()
+
+
+def commandForFile(filename, compileFile, store: Dict):
+    """
+    command = store["compile"][<compileFile>][filename]
+    """
+    compile_store = store.setdefault("compile", {})
+    info: CompileFileInfo = compile_store.get(compileFile)
+    if info is None:  # load {filename.lower: command} dict
+        info = CompileFileInfo(compileFile, store)  # cache first to avoid re enter when error
+        compile_store[compileFile] = info
+
     # xcode 12 escape =, but not recognized...
-    return info.get(filename.lower(), "").replace("\\=", "=")
+    return info.get(filename)
 
 
 def GetFlagsInCompile(filename, compileFile, store):
@@ -209,7 +221,7 @@ def GetFlagsInCompile(filename, compileFile, store):
 def GetFlags(filename: str, compileFile=None, **kwargs):
     """sourcekit entry function"""
     # NOTE: use store to ensure toplevel storage. child store should be other name
-    # see store.setdefault to get child attributes
+    # see store.setdefault to get all child attributes
     store = kwargs.get("store", globalStore)
     filename = os.path.realpath(filename)
 
@@ -221,7 +233,7 @@ def GetFlags(filename: str, compileFile=None, **kwargs):
         return InferFlagsForSwift(filename, compileFile, store)
     return {"flags": [], "do_cache": False}
 
-
+# TODO: c family infer flags #
 def InferFlagsForSwift(filename, compileFile, store):
     """try infer flags by convention and workspace files"""
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
