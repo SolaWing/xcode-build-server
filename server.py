@@ -75,7 +75,7 @@ class State(object):
         """all the compile information may change in background"""
 
         # store use to save compile_datainfo. it will be reload when config changes.
-        self.store = {}
+        self.store = {} # main-thread
         self._compile_file = self.get_compile_file(self.config)
         if os.path.exists(self._compile_file):
             self.compile_file = self._compile_file

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import os
 import re
@@ -117,7 +118,7 @@ def filterFlags(items, fileCache):
             #     continue
             if arg in {  # will make sourcekit report errors
                 "-use-frontend-parseable-output",
-                "-emit-localized-strings"
+                "-emit-localized-strings",
                 # "-frontend", "-c", "-pch-disable-validation", "-index-system-modules", "-enable-objc-interop",
                 # '-whole-module-optimization',
             }:
@@ -164,12 +165,16 @@ def findSwiftModuleRoot(filename):
 
     return (directory, flagFile, compileFile)
 
+
 class CompileFileInfo:
     def __init__(self, compileFile, store):
-        self.info = {}
+        self.file_info = {}  # {file: command}
+        self.dir_info = None  # {dir: set[file key]}
+        self.cmd_info = None  # {cmd: set[file key]}
 
         # load compileFile into info
         import json
+
         with open(compileFile) as f:
             m: List[dict] = json.load(f)
             for i in m:
@@ -177,22 +182,71 @@ class CompileFileInfo:
                 if not command:
                     continue
                 if files := i.get("files"):  # batch files, eg: swift module
-                    self.info.update((self.key(f), command) for f in files)
-                if fileLists := i.get("fileLists"):  # file list store in a dedicated file
-                    self.info.update(
+                    self.file_info.update((self.key(f), command) for f in files)
+                if fileLists := i.get(
+                    "fileLists"
+                ):  # file list store in a dedicated file
+                    self.file_info.update(
                         (self.key(f), command)
-                        for l in fileLists if os.path.isfile(l)
+                        for l in fileLists
+                        if os.path.isfile(l)
                         for f in getFileArgs(l, store.setdefault("filelist", {}))
                     )
                 if file := i.get("file"):  # single file info
-                    self.info[self.key(file)] = command
+                    self.file_info[self.key(file)] = command
 
     def get(self, filename):
-        if command := self.info.get(filename.lower()):
+        if command := self.file_info.get(filename.lower()):
             return command.replace("\\=", "=")
 
     def key(self, filename):
         return os.path.realpath(filename).lower()
+
+    def groupby_dir(self) -> dict[str, set[str]]:
+        if self.dir_info is None:  # lazy index dir and cmd
+            self.dir_info = defaultdict(set)
+            self.cmd_info = defaultdict(set)
+            for f, cmd in self.file_info.items():
+                self.dir_info[os.path.dirname(f)].add(f)
+                self.cmd_info[cmd].add(f)
+
+        return self.dir_info
+
+    # hack new file into current compile file
+    def new_file(self, filename):
+        # Currently only processing swift files
+        if not filename.endswith(".swift"):
+            return
+
+        filename = os.path.realpath(filename)
+        filename_key = filename.lower()
+        if filename_key in self.file_info:
+            return  # already handled
+
+        dir = os.path.dirname(filename_key)
+        samefile = next(
+            (v for v in self.groupby_dir().get(dir, ()) if v.endswith(".swift")), None
+        )
+        if not samefile:
+            return
+
+        command = self.file_info[samefile]
+        cmd_match = next(cmd_split_pattern.finditer(command), None)
+        if not cmd_match:
+            return
+        assert self.cmd_info
+        module_files = self.cmd_info.pop(command)
+        index = cmd_match.end()
+        from shlex import quote
+
+        command = "".join((command[:index], " ", quote(filename), command[index:]))
+
+        # update command info
+        self.groupby_dir()[dir].add(filename_key)
+        module_files.add(filename_key)
+        self.cmd_info[command] = module_files
+        for v in module_files:
+            self.file_info[v] = command
 
 
 def commandForFile(filename, compileFile, store: Dict):
@@ -202,8 +256,13 @@ def commandForFile(filename, compileFile, store: Dict):
     compile_store = store.setdefault("compile", {})
     info: CompileFileInfo = compile_store.get(compileFile)
     if info is None:  # load {filename.lower: command} dict
-        info = CompileFileInfo(compileFile, store)  # cache first to avoid re enter when error
+        # cache first to avoid re enter when error
+        info = CompileFileInfo(compileFile, store)
         compile_store[compileFile] = info
+
+        # if has additional new_file, generate command for it
+        for file in store.get("additional_files") or ():
+            info.new_file(file)
 
     # xcode 12 escape =, but not recognized...
     return info.get(filename)
@@ -232,6 +291,7 @@ def GetFlags(filename: str, compileFile=None, **kwargs):
     if filename.endswith(".swift"):
         return InferFlagsForSwift(filename, compileFile, store)
     return {"flags": [], "do_cache": False}
+
 
 # TODO: c family infer flags #
 def InferFlagsForSwift(filename, compileFile, store):
