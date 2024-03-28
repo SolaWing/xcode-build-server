@@ -249,6 +249,7 @@ class State(object):
             cmd = ["xclog_parser", "-al", xcpath, "-o", self._compile_file]
             if self.config.skip_validate_bin:
                 cmd.append("--skip-validate-bin")
+            logger.info(f"parse log at {xcpath}")
             parse(cmd)
             self.handle_compile_file_change()
         except OutputLockedError:
