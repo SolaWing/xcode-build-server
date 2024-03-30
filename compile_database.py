@@ -290,8 +290,7 @@ def GetFlags(filename: str, compileFile=None, store=None):
     """sourcekit entry function"""
     # NOTE: use store to ensure toplevel storage. child store should be other name
     # see store.setdefault to get all child attributes
-    if not store:
-        store = globalStore
+    if store is None: store = globalStore
 
     if compileFile:
         if final_flags := GetFlagsInCompile(filename, compileFile, store):
