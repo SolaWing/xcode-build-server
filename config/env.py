@@ -11,12 +11,15 @@ class Env:
         except Exception:
             return False
 
+    def on_key(self, key: str, default = False):
+        if value := os.environ.get(key):
+            return self.on(value)
+        return default
+
     @property
     @cache
     def new_file(self):
-        if newfile := os.environ.get("XBS_FEAT_NEWFILE"):
-            return self.on(newfile)
-        return False
+        return self.on_key("XBS_FEAT_NEWFILE", default=True)
 
 env = Env()
 
