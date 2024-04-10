@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import subprocess
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 globalStore = {}
@@ -250,7 +250,7 @@ class CompileFileInfo:
             self.file_info[v] = command
         return module_files
 
-def newfileForCompileFile(filename, compileFile, store) -> set[str] | None:
+def newfileForCompileFile(filename, compileFile, store) -> Optional[set[str]]:
     info = compileFileInfoFromStore(compileFile, store)
     return info.new_file(filename)
 
