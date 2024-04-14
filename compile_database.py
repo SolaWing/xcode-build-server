@@ -251,6 +251,7 @@ class CompileFileInfo:
         return module_files
 
 def newfileForCompileFile(filename, compileFile, store) -> Optional[set[str]]:
+    if not compileFile: return None
     info = compileFileInfoFromStore(compileFile, store)
     return info.new_file(filename)
 
