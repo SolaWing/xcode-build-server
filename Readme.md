@@ -98,6 +98,10 @@ if you found find definition or references is not work correctly, just build it 
 
 current implementation is basicly work, but may have some rough edges. Please report issue if you have any problem. If you want to help, can check the open issue list. PR is always welcome.
 
+# Common Issues
+
+* If you use multiple versions of xcode or sourcekit-lsp, and it doesn't work properly, such as Loading the standard library failed, you should check that the build and sourcekit-lsp versions are **consistent**. Usually you can use `xcode-select` to switch toolchains, and use `xcrun sourcekit-lsp` to use the corresponding lsp version.
+
 # Development
 
 ## Release new version
