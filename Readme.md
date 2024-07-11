@@ -101,6 +101,7 @@ current implementation is basicly work, but may have some rough edges. Please re
 # Common Issues
 
 * If you use multiple versions of xcode or sourcekit-lsp, and it doesn't work properly, such as Loading the standard library failed, you should check that the build and sourcekit-lsp versions are **consistent**. Usually you can use `xcode-select` to switch toolchains, and use `xcrun sourcekit-lsp` to use the corresponding lsp version.
+* If cross-file references don't work for you, the "build_root" property might not be configured correctly in `buildServer.json`. It should look like `"build_root": "/Users/yourusername/Library/Developer/Xcode/DerivedData/Simulator_Controller-adadrfjxhdizubdktugddworgvuj"` rather than `"build_root":  "/Users/yourusername"`. Fix this by running `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` in the root of your XCode project. For more details, see [this issue](https://github.com/SolaWing/xcode-build-server/issues/55).
 
 # Development
 
