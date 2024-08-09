@@ -83,7 +83,7 @@ def main(argv=sys.argv):
         workspace = get_workspace()
 
     # find and record build_root for workspace and scheme
-    cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null | grep "\\bBUILD_DIR =" | head -1 | awk -F" = " '{{print $2}}' | tr -d '"' """
+    cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null | grep "\\bSYMROOT =" | head -1 | awk -F" = " '{{print $2}}' | tr -d '"' """
     build_dir = subprocess.check_output(cmd, shell=True, universal_newlines=True)
     build_root = os.path.join(build_dir, "../..")
     build_root = os.path.abspath(build_root)
