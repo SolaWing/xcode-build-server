@@ -35,6 +35,7 @@ Go to your workspace directory and execute one of the following commands:
 
 ```bash
 # *.xcworkspace or *.xcodeproj should be unique. can be omit and will auto choose the unique workspace or project.
+# -scheme can also be omit to auto bind the latest scheme build result. even change it in xcode after the buildServer.json generated
 xcode-build-server config -workspace *.xcworkspace -scheme <XXX> 
 xcode-build-server config -project *.xcodeproj -scheme <XXX> 
 ```

@@ -73,11 +73,11 @@ class State(object):
         # can only changed in sync_compile_file, which block all thread and no one access it.
         # other time, the shared state is readonly and safe..
 
-    def get_compile_file(self, config):
+    def get_compile_file(self, config: ServerConfig):
         # isolate xcode generate compile file and manual compile_file
         if config.kind == "xcode":
             hash = hashlib.md5(config.build_root.encode("utf-8")).hexdigest()
-            name = ["compile_file", config.scheme, hash]
+            name = ["compile_file", config.scheme or "_last", hash]
             if config.skip_validate_bin:
                 name[0] = "compile_file1"
             return os.path.join(self.cache_path, "-".join(name))

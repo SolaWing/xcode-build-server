@@ -4,6 +4,7 @@ import inspect
 import os
 import subprocess
 import sys
+import json
 
 from .config import ServerConfig
 
@@ -19,7 +20,8 @@ def usage(name, msg=None):
             {name} -workspace *.xcworkspace -scheme <schemename>
             {name} -project *.xcodeproj -scheme <schemename>
 
-            workspace and project and be infered if only one in pwd. scheme must be specified.
+            workspace and project and be infered if only one in pwd.
+            scheme can be omit to bind the lastest build scheme.
             see also `man xcodebuild` and xcodebuild -showBuildSettings
 
             Other Options:
@@ -57,9 +59,6 @@ def main(argv=sys.argv):
         else:
             _usage(f"unknown arg {arg}")
 
-    if scheme is None:
-        _usage("you need to specify scheme!")
-
     if workspace is None:
 
         def get_workspace():
@@ -82,17 +81,26 @@ def main(argv=sys.argv):
 
         workspace = get_workspace()
 
+    lastest_scheme = False
+    if scheme is None:
+        output = subprocess.check_output(f"xcodebuild -list -json -workspace '{workspace}'", shell=True, universal_newlines=True)
+        output = json.loads(output)
+        scheme = output["workspace"]["schemes"][0]
+        lastest_scheme = True
+        # _usage("you need to specify scheme!")
+
     # find and record build_root for workspace and scheme
-    cmd = f"""xcodebuild -showBuildSettings -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null | grep "\\bSYMROOT =" | head -1 | awk -F" = " '{{print $2}}' | tr -d '"' """
-    build_dir = subprocess.check_output(cmd, shell=True, universal_newlines=True)
-    build_root = os.path.join(build_dir, "../..")
-    build_root = os.path.abspath(build_root)
+    output = subprocess.check_output(f"xcodebuild -showBuildSettings -json -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null", shell=True, universal_newlines=True)
+    output = json.loads(output)
+    build_dir = output[0]["buildSettings"]["SYMROOT"]
+    build_root = os.path.abspath(os.path.join(build_dir, "../.."))
+
     print("find root:", build_root)
 
     config = ServerConfig.shared()
     config.workspace = os.path.abspath(os.path.expanduser(workspace))
     config.build_root = build_root
-    config.scheme = scheme
+    config.scheme = None if lastest_scheme else scheme
     config.kind = "xcode"
     config.skip_validate_bin = skip_validate_bin
     config.save()
