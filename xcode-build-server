@@ -17,7 +17,7 @@ def show_help():
           SPECIAL ENVIRONMENT VARIABLE:
             SOURCEKIT_LOGGING=3: enable detail debug log
             XBS_LOGPATH: set log path. default is `:stderr`. use `:null` to disable log
-            XBS_FEAT_NEWFILE=1: enable auto new file hack by infer flags from same dir files..
+            XBS_FEAT_NEWFILE=1: enable auto new file hack by infer flags from same dir files.., default true
           """
     )
     exit(0)
