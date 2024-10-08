@@ -82,7 +82,7 @@ class State(object):
                 name[0] = "compile_file1"
             return os.path.join(self.cache_path, "-".join(name))
         # manual compile_file
-        return os.path.join(self.root_path, ".compile_file")
+        return os.path.join(self.root_path, ".compile")
 
     def reinit_compile_info(self):
         """all the compile information may change in background"""
