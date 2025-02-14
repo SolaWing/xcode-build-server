@@ -45,19 +45,38 @@ def main(argv=sys.argv):
     scheme = None
     project = None
     skip_validate_bin = None
+    build_root = None
     while (arg := next(it, None)) is not None:
-        if arg == "-workspace":
+        if arg == "-workspace" or arg == "--workspace":
             workspace = next(it, None)
-        elif arg == "-scheme":
+        elif arg == "-scheme" or arg == "--scheme":
             scheme = next(it, None)
-        elif arg == "-project":
+        elif arg == "-project" or arg == "--project":
             project = next(it, None)
+        elif arg == "--build_root":
+            build_root = next(it, None)
         elif arg == "--skip-validate-bin":
             skip_validate_bin = True
         elif "-h" == arg or "--help" == arg or "-help" == arg:
             _usage()
         else:
             _usage(f"unknown arg {arg}")
+
+    def update(scheme):
+        print("find root:", build_root)
+
+        config = ServerConfig.shared()
+        config.workspace = workspace
+        config.build_root = build_root
+        config.scheme = scheme
+        config.kind = "xcode"
+        config.skip_validate_bin = skip_validate_bin
+        config.save()
+        print("updated buildServer.json")
+
+    if build_root:
+        build_root = os.path.abspath(os.path.expanduser(build_root))
+        return update(scheme)
 
     if workspace is None:
 
@@ -95,15 +114,5 @@ def main(argv=sys.argv):
     build_dir = output[0]["buildSettings"]["SYMROOT"]
     build_root = os.path.abspath(os.path.join(build_dir, "../.."))
 
-    print("find root:", build_root)
-
-    config = ServerConfig.shared()
-    config.workspace = os.path.abspath(os.path.expanduser(workspace))
-    config.build_root = build_root
-    config.scheme = None if lastest_scheme else scheme
-    config.kind = "xcode"
-    config.skip_validate_bin = skip_validate_bin
-    config.save()
-    print("updated buildServer.json")
-
-
+    workspace = os.path.abspath(os.path.expanduser(workspace))
+    return update(None if lastest_scheme else scheme)
