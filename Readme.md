@@ -28,7 +28,7 @@ or install using [Macports](https://github.com/macports/macports-ports/blob/mast
 
 # Usage
 
-Choose one of the following methods. (No matter which method you use, you need to ensure that the directory where `buildServer.json` is created in is **the root directory** of your project)
+Choose one of the following methods. (No matter which method you use, you need to ensure that the directory where `buildServer.json` is created in is **the root/working directory** of the LSP)
 
 ### Bind to Xcode
 Go to your workspace directory and execute one of the following commands:
