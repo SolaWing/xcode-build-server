@@ -8,7 +8,7 @@ This repo aims to integrate xcode with sourcekit-lsp and support all the languag
 
 This repo requires Python 3.9. The latest macOS already comes with this tool.
 
-After you've made sure you have Python 3.9, just clone this repo, and a symbolic link to your bin folder by running: `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
+After you've made sure you have Python 3.9, just clone this repo, and add a symbolic link to your bin folder by running: `ln -s ABSPATH/TO/xcode-build-server /usr/local/bin`
 
 Here is a script for quick install if your working directory is your desired destination for the installation:
 
