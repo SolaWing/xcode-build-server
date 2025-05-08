@@ -103,14 +103,18 @@ def main(argv=sys.argv):
 
     lastest_scheme = False
     if scheme is None:
-        output = subprocess.check_output(f"xcodebuild -list -json -workspace '{workspace}'", shell=True, universal_newlines=True)
+        cmd = f"xcodebuild -list -json -workspace '{workspace}'"
+        print("run: ", cmd)
+        output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
         output = json.loads(output)
         scheme = output["workspace"]["schemes"][0]
         lastest_scheme = True
         # _usage("you need to specify scheme!")
 
     # find and record build_root for workspace and scheme
-    output = subprocess.check_output(f"xcodebuild -showBuildSettings -json -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null", shell=True, universal_newlines=True)
+    cmd = f"xcodebuild -showBuildSettings -json -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null"
+    print("run: ", cmd)
+    output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
     output = json.loads(output)
     build_dir = output[0]["buildSettings"]["SYMROOT"]
     build_root = os.path.abspath(os.path.join(build_dir, "../.."))
