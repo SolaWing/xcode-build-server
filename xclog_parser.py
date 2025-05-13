@@ -193,13 +193,14 @@ class XcodeLogParser(object):
             return
 
         found_command = False
+        command: str = None # type: ignore
         for command in li:
             if re.match(self.clang_exec, command):
                 found_command = True
                 break
 
         if not self.skip_validate_bin and not found_command:
-            echo("Error: ========== Can't find clang\n" + li)
+            echo("Error: ========== Can't find clang\n" + "\n".join(li))
             return
 
         info = cmd_split(line)
