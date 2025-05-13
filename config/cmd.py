@@ -82,6 +82,7 @@ def main(argv=sys.argv):
     if workspace is None:
 
         def get_workspace():
+            nonlocal project
             if project is None:
                 workspaces = glob.glob("*.xcworkspace")
                 if len(workspaces) > 1:
@@ -89,30 +90,45 @@ def main(argv=sys.argv):
                 if len(workspaces) == 1:
                     return workspaces[0]
 
-                projects = glob.glob("*.xcodeproj/*.xcworkspace")
+                projects = glob.glob("*.xcodeproj")
                 if len(projects) > 1:
                     _usage("there are multiple xcodeproj in pwd, please specify one")
                 if len(projects) == 1:
-                    return projects[0]
+                    project = projects[0]
+                    return os.path.join(project, "project.xcworkspace")
 
                 _usage("there no xcworkspace or xcodeproj in pwd, please specify one")
             else:
                 return os.path.join(project, "project.xcworkspace")
 
         workspace = get_workspace()
+    else:
+        project = None # clear to avoid specify both
+
+    use_project = False
+    if os.path.exists(workspace):
+        cmd_target = f"-workspace '{workspace}'"
+    elif project:
+        cmd_target = f"-project '{project}'"
+        use_project = True
+    else:
+        _usage("can't get exist xcworkspace, please specify one")
 
     lastest_scheme = False
     if scheme is None:
-        cmd = f"xcodebuild -list -json -workspace '{workspace}'"
+        cmd = f"xcodebuild -list -json {cmd_target}"
         print("run: ", cmd)
         output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
         output = json.loads(output)
-        scheme = output["workspace"]["schemes"][0]
+        if use_project:
+            scheme = output["project"]["schemes"][0]
+        else:
+            scheme = output["workspace"]["schemes"][0]
         lastest_scheme = True
         # _usage("you need to specify scheme!")
 
     # find and record build_root for workspace and scheme
-    cmd = f"xcodebuild -showBuildSettings -json -workspace '{workspace}' -scheme '{scheme}' 2>/dev/null"
+    cmd = f"xcodebuild -showBuildSettings -json {cmd_target} -scheme '{scheme}' 2>/dev/null"
     print("run: ", cmd)
     output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
     output = json.loads(output)
