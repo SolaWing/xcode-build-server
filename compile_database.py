@@ -17,6 +17,17 @@ cmd_split_pattern = re.compile(
     re.X,
 )
 
+XCODE_BASE_PATH = None
+
+
+def getXcodeBasePath():
+    global XCODE_BASE_PATH
+    if XCODE_BASE_PATH is None:
+        XCODE_BASE_PATH = subprocess.check_output(
+            ["xcode-select", "-p"]
+        ).rstrip().decode('utf8')
+    return XCODE_BASE_PATH
+
 
 def isProjectRoot(directory):
     return os.path.exists(os.path.join(directory, ".git"))
@@ -327,13 +338,13 @@ def InferFlagsForSwift(filename, compileFile, store):
         else:
             final_flags += [
                 "-sdk",
-                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
+                os.path.join(getXcodeBasePath(), "Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/"),
             ]
     if not final_flags:
         final_flags = [
             filename,
             "-sdk",
-            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
+            os.path.join(getXcodeBasePath(), "Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/"),
         ]
 
     return final_flags
