@@ -88,7 +88,7 @@ def readFileArgs(path):
         return cmd_split(f.read())
 
 
-# 以文件里的内容作为命令行参数，会进行shell分词展开
+# Use file content as command line arguments, will perform shell word splitting
 def getFileArgs(path, cache) -> List[str]:
     files = cache.get(path)
     if files is None:
@@ -165,8 +165,10 @@ def findSwiftModuleRoot(filename):
 
     return (directory, flagFile, compileFile)
 
+
 def filekey(filename):
     return os.path.realpath(filename).lower()
+
 
 class CompileFileInfo:
     def __init__(self, compileFile, store):
@@ -225,22 +227,49 @@ class CompileFileInfo:
             return {filename_key}  # already handled
 
         dir = os.path.dirname(filename_key)
-        samefile = next(
-            (v for v in self.groupby_dir().get(dir, ()) if v.endswith(".swift")), None
+
+        # 1. First look for existing swift files in the current directory
+        similar_compiled_file = next(
+            (v for v in self.groupby_dir().get(
+                dir, ()) if v.endswith(".swift")), None
         )
-        if not samefile:
+
+        # 2. If not found in current directory, search upward through parent directories until project root
+        if not similar_compiled_file:
+            current_dir = dir
+            while current_dir and current_dir != "/":
+                parent_dir = os.path.dirname(current_dir)
+
+                # Look for swift files in parent directory
+                similar_compiled_file = next(
+                    (v for v in self.groupby_dir().get(
+                        parent_dir, ()) if v.endswith(".swift")), None
+                )
+                if similar_compiled_file:
+                    break
+
+                # If reached project root, stop searching
+                if isProjectRoot(parent_dir):
+                    break
+
+                current_dir = parent_dir
+
+        if not similar_compiled_file:
             return
 
-        command = self.file_info[samefile]
+        logging.info(
+            f"Add new file {filename} to similar_compiled_file: {similar_compiled_file}")
+
         cmd_match = next(cmd_split_pattern.finditer(command), None)
         if not cmd_match:
             return
-        assert self.cmd_info # init in groupby_dir
+        assert self.cmd_info  # init in groupby_dir
         module_files = self.cmd_info.pop(command)
         index = cmd_match.end()
         from shlex import quote
 
-        command = "".join((command[:index], " ", quote(filename), command[index:]))
+        command = "".join(
+            (command[:index], " ", quote(filename), command[index:]))
 
         # update command info
         self.groupby_dir()[dir].add(filename_key)
@@ -250,10 +279,13 @@ class CompileFileInfo:
             self.file_info[v] = command
         return module_files
 
+
 def newfileForCompileFile(filename, compileFile, store) -> Optional[set[str]]:
-    if not compileFile: return None
+    if not compileFile:
+        return None
     info = compileFileInfoFromStore(compileFile, store)
     return info.new_file(filename)
+
 
 def commandForFile(filename, compileFile, store: Dict):
     """
@@ -291,7 +323,8 @@ def GetFlags(filename: str, compileFile=None, store=None):
     """sourcekit entry function"""
     # NOTE: use store to ensure toplevel storage. child store should be other name
     # see store.setdefault to get all child attributes
-    if store is None: store = globalStore
+    if store is None:
+        store = globalStore
 
     if compileFile:
         if final_flags := GetFlagsInCompile(filename, compileFile, store):
