@@ -23,9 +23,12 @@ XCODE_BASE_PATH = None
 def getXcodeBasePath():
     global XCODE_BASE_PATH
     if XCODE_BASE_PATH is None:
-        XCODE_BASE_PATH = subprocess.check_output(
-            ["xcode-select", "-p"]
-        ).rstrip().decode('utf8')
+        try:
+            XCODE_BASE_PATH = subprocess.check_output(
+                ["xcode-select", "-p"]
+            ).rstrip().decode('utf8')
+        except subprocess.CalledProcessError:
+            XCODE_BASE_PATH = '/Applications/Xcode.app/Contents/Developer'
     return XCODE_BASE_PATH
 
 
