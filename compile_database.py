@@ -150,10 +150,11 @@ def filterFlags(items, fileCache):
         pass
 
 
-def findSwiftModuleRoot(filename):
+def findSwiftModuleRoot(filename, directory=None):
     """return project root or None. if not found"""
     filename = os.path.abspath(filename)
-    directory = os.path.dirname(filename)
+    if not directory:
+        directory = os.path.dirname(filename)
     flagFile = None
     compileFile = None
     while directory and directory != "/":
@@ -352,6 +353,10 @@ def GetFlags(filename: str, compileFile=None, store=None):
 def InferFlagsForSwift(filename, compileFile, store):
     """try infer flags by convention and workspace files"""
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
+    if not compileFile:
+        # search for workspace from current directory if no compile file found
+        project_root, flagFile, compileFile = findSwiftModuleRoot(filename, directory=os.getcwd())
+
     logging.debug(f"infer root: {project_root}, {compileFile}")
     final_flags = GetFlagsInCompile(filename, compileFile, store)
 
