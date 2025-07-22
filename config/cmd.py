@@ -119,12 +119,7 @@ def main(argv=sys.argv):
         cmd = f"xcodebuild -list -json {cmd_target}"
         print("run: ", cmd)
         output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        if output[0] != "{":
-            # https://github.com/swiftlang/swift-package-manager/blob/f19d08cf79250514851490599319d22771074b01/Sources/PackageLoading/TargetSourcesBuilder.swift#L194
-            # SPM print error message to stdout, skip it
-            start = output.find("{")
-            output = output[start:]
-        output = json.loads(output)
+        output = json_loads(output)
         if use_project:
             scheme = output["project"]["schemes"][0]
         else:
@@ -136,9 +131,22 @@ def main(argv=sys.argv):
     cmd = f"xcodebuild -showBuildSettings -json {cmd_target} -scheme '{scheme}' 2>/dev/null"
     print("run: ", cmd)
     output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
-    output = json.loads(output)
+    output = json_loads(output)
     build_dir = output[0]["buildSettings"]["SYMROOT"]
     build_root = os.path.abspath(os.path.join(build_dir, "../.."))
 
     workspace = os.path.abspath(os.path.expanduser(workspace))
     return update(None if lastest_scheme else scheme)
+
+def json_loads(s: str):
+    if s[0] != "{" and s[0] != "[":
+        # https://github.com/swiftlang/swift-package-manager/blob/f19d08cf79250514851490599319d22771074b01/Sources/PackageLoading/TargetSourcesBuilder.swift#L194
+        # SPM print error message to stdout, skip it
+        brace = s.find("{")
+        bracket = s.find("[")
+        if brace < 0: start = bracket
+        elif bracket < 0: start = brace
+        else: start = min(brace, bracket)
+        if start > 0: s = s[start:]
+
+    return json.loads(s)
