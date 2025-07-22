@@ -119,6 +119,11 @@ def main(argv=sys.argv):
         cmd = f"xcodebuild -list -json {cmd_target}"
         print("run: ", cmd)
         output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+        if output[0] != "{":
+            # https://github.com/swiftlang/swift-package-manager/blob/f19d08cf79250514851490599319d22771074b01/Sources/PackageLoading/TargetSourcesBuilder.swift#L194
+            # SPM print error message to stdout, skip it
+            start = output.find("{")
+            output = output[start:]
         output = json.loads(output)
         if use_project:
             scheme = output["project"]["schemes"][0]
