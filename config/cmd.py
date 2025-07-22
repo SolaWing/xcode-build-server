@@ -139,14 +139,21 @@ def main(argv=sys.argv):
     return update(None if lastest_scheme else scheme)
 
 def json_loads(s: str):
-    if s[0] != "{" and s[0] != "[":
-        # https://github.com/swiftlang/swift-package-manager/blob/f19d08cf79250514851490599319d22771074b01/Sources/PackageLoading/TargetSourcesBuilder.swift#L194
-        # SPM print error message to stdout, skip it
-        brace = s.find("{")
-        bracket = s.find("[")
-        if brace < 0: start = bracket
-        elif bracket < 0: start = brace
-        else: start = min(brace, bracket)
-        if start > 0: s = s[start:]
+    # https://github.com/swiftlang/swift-package-manager/blob/f19d08cf79250514851490599319d22771074b01/Sources/PackageLoading/TargetSourcesBuilder.swift#L194
+    # SPM print error message to stdout, skip it
+    brace = s.find("{")
+    bracket = s.find("[")
+    if brace < 0: start = bracket
+    elif bracket < 0: start = brace
+    else: start = min(brace, bracket)
+    if start < 0: start = 0
 
-    return json.loads(s)
+    brace = s.rfind("}")
+    bracket = s.rfind("]")
+    if brace < 0: end = bracket
+    elif bracket < 0: end = brace
+    else: end = max(brace, bracket)
+    if end < 0: end = len(s)
+    else: end = end + 1
+
+    return json.loads(s[start:end])
