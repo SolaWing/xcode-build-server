@@ -1,5 +1,7 @@
 import os
 
+VERSION = "1.3.0"
+
 def bundle_path(path):
     return os.path.abspath(os.path.join(os.path.realpath(__file__), "..", path))
 

@@ -15,7 +15,7 @@ from compile_database import (
     newfileForCompileFile,
 )
 from config import ServerConfig, env
-from misc import force_remove, get_mtime
+from misc import force_remove, get_mtime, VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -354,8 +354,8 @@ def server_api():
             "id": message["id"],
             "result": {
                 "displayName": "xcode build server",
-                "version": "0.1",
-                "bspVersion": "2.0",
+                "version": VERSION,
+                "bspVersion": "2.2.0",
                 "rootUri": rootUri,
                 "capabilities": {
                     "languageIds": ["c", "cpp", "objective-c", "objective-cpp", "swift"]

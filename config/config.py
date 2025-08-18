@@ -3,6 +3,7 @@ import json
 import os
 import sys
 
+from misc import VERSION
 
 def _config_property(name, default=None, doc=None, delete_none=True):
     """
@@ -68,8 +69,8 @@ class ServerConfig(object):
 
         self.data.update({
             "name": "xcode build server",
-            "version": "0.2",
-            "bspVersion": "2.0",
+            "version": VERSION,
+            "bspVersion": "2.2.0",
             "languages": ["c", "cpp", "objective-c", "objective-cpp", "swift"],
             "argv": [sys.argv[0]]
         })
