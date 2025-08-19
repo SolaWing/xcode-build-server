@@ -7,6 +7,7 @@ from threading import Lock, Thread, main_thread
 import time
 from typing import Optional
 import urllib.parse
+from pathlib import Path
 
 from compile_database import (
     GetFlags,
@@ -15,7 +16,7 @@ from compile_database import (
     newfileForCompileFile,
 )
 from config import ServerConfig, env
-from misc import force_remove, get_mtime, VERSION
+from misc import force_remove, get_mtime, VERSION, version_compare
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,14 @@ def uptodate(target: str, srcs: list[str]):
 
 
 class State(object):
-    def __init__(self, root_path: str, cache_path):
-        """pass in path should be absolute and normalized"""
+    def __init__(self, root_path: str, cache_path, new_version):
+        """
+        pass in path should be absolute and normalized
+        :param new_version: if LSP is new version and support target prepare
+        """
         self.root_path = root_path
         self.cache_path = cache_path
+        self.new_version = new_version
         os.makedirs(cache_path, exist_ok=True)
 
         # buildServer.json used as config dict
@@ -137,6 +142,24 @@ class State(object):
 
     def unregister_uri(self, uri):
         self.observed_uri.remove(uri)
+
+    def sourceKitOptions(self, uri):
+        file_path = uri2realpath(uri)
+        flags = GetFlags(file_path, self.compile_file, store=self.store)
+        if not flags and env.new_file:
+            if newfileForCompileFile(file_path, self.compile_file, store=self.store):
+                flags = GetFlags(file_path, self.compile_file, store=self.store)
+                self.notify_target_changes()
+
+        if not flags and file_path.endswith(".swift"):
+            flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
+
+        if result := self.optionsForFlags(flags):
+            return {
+                "compilerArguments": result["options"],
+                "workingDirectory": result["workingDirectory"],
+            }
+        return None
 
     def optionsForFile(self, uri):
         file_path = uri2realpath(uri)
@@ -307,12 +330,24 @@ class State(object):
         NOTE: called by observe thread, and block main thread,
         to ensure when exit, all thread is in the runloop and no middle state.
         """
-        with lock:
+        with mainlock:
             if before:
                 before()
             self.reinit_compile_info()
 
-            # TODO: increment diff change and notify #
+            self.notify_target_changes()
+
+    def notify_target_changes(self):
+        # TODO: increment diff change and notify #
+        if self.new_version:
+            send({
+                "jsonrpc": "2.0",
+                "method": "buildTarget/didChange",
+                "params": {
+                    "changes": None
+                },
+            })
+        else:
             for v in self.observed_uri:
                 self.notify_option_changed(v)
 
@@ -331,8 +366,11 @@ def server_api():
             os.path.expanduser("~/Library/Caches/xcode-build-server"),
             root_path.replace("/", "-"),
         )
+        bspVersion = message["params"]["bspVersion"]
 
-        state = State(root_path, cache_path)
+        state = State(
+            root_path, cache_path, new_version=version_compare("2.2.0", bspVersion) <= 0
+        )
         global shared_state
         if shared_state:
             logger.warn("already initialized!!")
@@ -363,77 +401,69 @@ def server_api():
                 "data": {
                     "indexDatabasePath": indexDatabasePath,
                     "indexStorePath": indexStorePath,
+                    "sourceKitOptionsProvider": True,
                 },
+                "dataKind": "sourceKit",
             },
         }
 
     def build_initialized(message):
         shared_state.start_observe_changes()
 
+    def workspace_waitForBuildSystemUpdates(message):
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {},
+        }
+
     def workspace_buildTargets(message):
-        # TODO: 这个可能用不上? #
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
             "result": {
+                # TODO: support real multiple target
                 "targets": [
-                    # {
-                    # "id": {
-                    #     "uri": "target:test-swiftTests"
-                    # },
-                    # "displayName": "Second Target",
-                    # "baseDirectory": "file:///Users/wang/Desktop/test-swift/Tests/test-swiftTests",
-                    # "tags": ["library", "test"],
-                    # "capabilities": {
-                    #     "canCompile": True,
-                    #     "canTest": False,
-                    #     "canRun": False
-                    # },
-                    # "languageIds": ["objective-c", "swift"],
-                    # "dependencies": [{
-                    #     "uri": "target:test-swift"
-                    # }]
-                    # }
+                    {
+                        "id": {"uri": "dummy://dummy"},
+                        "displayName": "BuildServer",
+                        "tags": ["test"],
+                        "capabilities": {
+                            # "canCompile": True,
+                            # "canTest": False,
+                            # "canRun": False
+                        },
+                        "languageIds": [
+                            "c",
+                            "cpp",
+                            "objective-c",
+                            "objective-cpp",
+                            "swift",
+                        ],
+                        "dependencies": [],
+                    }
                 ]
             },
         }
 
     def buildTarget_sources(message):
-        # TODO: 这个可能用不上? #
-        return {
-            "jsonrpc": "2.0",
-            "id": message["id"],
-            "result": {
-                "items": [
-                    # {
-                    # "target": {
-                    #     "uri": "target:test-swift"
-                    # },
-                    # "sources": [
-                    #     {
-                    #         "uri": "file:///Users/wang/Desktop/test-swift/Sources/test-swift/a.swift",
-                    #         "kind": 1,
-                    #         "generated": False
-                    #     },
-                    #     {
-                    #         "uri": "file:///Users/wang/Desktop/test-swift/Sources/test-swift/test_swift.swift",
-                    #         "kind": 1,
-                    #         "generated": False
-                    #     },
-                    # ]
-                    # }, {
-                    # "target": {
-                    #     "uri": "target:test-swiftTests"
-                    # },
-                    # "sources": [{
-                    #     "uri": "file:///Users/wang/Desktop/test-swift/Tests/test-swiftTests/test_swiftTests.swift",
-                    #     "kind": 1,
-                    #     "generated": False
-                    # }]
-                    # }
-                ]
-            },
-        }
+        params: dict = message["params"]
+        items = []
+        for target in params["targets"]:
+            if target["uri"] == "dummy://dummy":
+                items.append({
+                    "target": target,
+                    "sources": [
+                        {
+                            # TODO: 换成真实的target和sources
+                            "uri": Path(shared_state.root_path).as_uri(),
+                            "kind": 2, # 1: file, 2: directory
+                            "generated": False
+                        }
+                    ]
+                })
+
+        return {"jsonrpc": "2.0", "id": message["id"], "result": {"items": items }}
 
     def textDocument_registerForChanges(message):
         # empty response, ensure response before notification
@@ -448,10 +478,11 @@ def server_api():
             shared_state.unregister_uri(uri)
 
     def textDocument_sourceKitOptions(message):
+        uri = message["params"]["textDocument"]["uri"]
         return {
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": shared_state.optionsForFile(message["params"]["uri"]),
+            "result": shared_state.sourceKitOptions(uri),
         }
 
     # TODO: outputPaths, no spec? #
@@ -466,7 +497,7 @@ def server_api():
 
 
 dispatch = server_api()
-lock = Lock()
+mainlock = Lock()
 
 
 def serve():
@@ -494,7 +525,7 @@ def serve():
                     },
                 }
 
-        with lock:
+        with mainlock:
             response = None
             handler = dispatch.get(message["method"].replace("/", "_"))
             if handler:
