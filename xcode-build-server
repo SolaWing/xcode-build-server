@@ -95,7 +95,7 @@ def main():
                     print(f"extract xcactivitylog at {path}")
                     for l in xcactivitylog.extract_compile_log(path):
                         print(l)
-            if sys.argv[2] == "build":
+            elif sys.argv[2] == "build":
                 import subprocess
                 code = subprocess.call(["osascript", "-l", "JavaScript", misc.bundle_path("xcode/build.js"), *sys.argv[3:]])
                 exit(code)
