@@ -300,12 +300,15 @@ class CompileFileInfo:
         command = "".join(
             (command[:index], " ", quote(filename), command[index:]))
 
+        workspace_dir = self.workspace_dir_info[similar_compiled_file]
+
         # update command info
         self.groupby_dir()[dir].add(filename_key)
         module_files.add(filename_key)
         self.cmd_info[command] = module_files
         for v in module_files:
             self.file_info[v] = command
+            self.workspace_dir_info[v] = workspace_dir
         return module_files
 
 
