@@ -11,6 +11,7 @@ from pathlib import Path
 
 from compile_database import (
     GetFlags,
+    GetWorkingDirectory,
     InferFlagsForSwift,
     filekey,
     newfileForCompileFile,
@@ -138,7 +139,9 @@ class State(object):
         if not flags and file_path.endswith(".swift"):
             flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
 
-        self._notify_option_changed(uri, self.optionsForFlags(flags))
+        working_directory = GetWorkingDirectory(file_path, self.compile_file, store=self.store)
+
+        self._notify_option_changed(uri, self.optionsForFlags(flags, working_directory))
 
     def unregister_uri(self, uri):
         self.observed_uri.remove(uri)
@@ -154,7 +157,9 @@ class State(object):
         if not flags and file_path.endswith(".swift"):
             flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
 
-        if result := self.optionsForFlags(flags):
+        working_directory = GetWorkingDirectory(file_path, self.compile_file, store=self.store)
+
+        if result := self.optionsForFlags(flags, working_directory):
             return {
                 "compilerArguments": result["options"],
                 "workingDirectory": result["workingDirectory"],
@@ -166,15 +171,19 @@ class State(object):
         flags = GetFlags(file_path, self.compile_file, store=self.store)
         if not flags and file_path.endswith(".swift"):
             flags = InferFlagsForSwift(file_path, self.compile_file, store=self.store)
-        return self.optionsForFlags(flags)
+        working_directory = GetWorkingDirectory(file_path, self.compile_file, store=self.store)
+        return self.optionsForFlags(flags, working_directory)
 
-    def optionsForFlags(self, flags):
+    def optionsForFlags(self, flags, working_directory):
         if flags is None:
             return None
         try:
             workdir = flags[flags.index("-working-directory") + 1]
         except (IndexError, ValueError):
-            workdir = os.getcwd()
+            if working_directory:
+                workdir = working_directory
+            else:
+                workdir = os.getcwd()
         return {
             "options": flags,
             "workingDirectory": workdir,
