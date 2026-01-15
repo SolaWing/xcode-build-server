@@ -460,26 +460,30 @@ def server_api():
         items = []
         for target in params["targets"]:
             if target["uri"] == "dummy://dummy":
+                sources = [
+                    {
+                        # TODO: 换成真实的target和sources
+                        "uri": Path(shared_state.root_path).as_uri(),
+                        "kind": 2,  # 1: file, 2: directory
+                        "generated": False,
+                    },
+                ]
+                if shared_state.config.build_root:
+                    sources.append(
+                        {
+                            "uri": Path(
+                                shared_state.config.build_root,
+                                "SourcePackages",
+                                "checkouts",
+                            ).as_uri(),
+                            "kind": 2,  # 1: file, 2: directory
+                            "generated": False,
+                        }
+                    )
                 items.append(
                     {
                         "target": target,
-                        "sources": [
-                            {
-                                # TODO: 换成真实的target和sources
-                                "uri": Path(shared_state.root_path).as_uri(),
-                                "kind": 2,  # 1: file, 2: directory
-                                "generated": False,
-                            },
-                            {
-                                "uri": Path(
-                                    shared_state.config.build_root,
-                                    "SourcePackages",
-                                    "checkouts",
-                                ).as_uri(),
-                                "kind": 2,  # 1: file, 2: directory
-                                "generated": False,
-                            },
-                        ],
+                        "sources": sources,
                     }
                 )
 
