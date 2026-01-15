@@ -189,6 +189,7 @@ class CompileFileInfo:
         self.file_info = {}  # {file: command}
         self.dir_info = None  # {dir: set[file key]}
         self.cmd_info = None  # {cmd: set[file key]}
+        self.workspace_dir_info = {}
 
         # load compileFile into info
         import json
@@ -210,13 +211,25 @@ class CompileFileInfo:
                         if os.path.isfile(l)
                         for f in getFileArgs(l, store.setdefault("filelist", {}))
                     )
+                    if "directory" in i:
+                        self.workspace_dir_info.update(
+                            (filekey(f), i.get("directory"))
+                            for l in fileLists
+                            if os.path.isfile(l)
+                            for f in getFileArgs(l, store.setdefault("filelist", {}))
+                        )
                 if file := i.get("file"):  # single file info
                     self.file_info[filekey(file)] = command
+                    if "directory" in i:
+                        self.workspace_dir_info[filekey(file)] = i.get("directory")
 
     def get(self, filename):
         if command := self.file_info.get(filename.lower()):
             # xcode 12 escape =, but not recognized...
             return command.replace("\\=", "=")
+
+    def get_working_directory(self, filename):
+        return self.workspace_dir_info.get(filekey(filename))
 
     def groupby_dir(self) -> dict[str, set[str]]:
         if self.dir_info is None:  # lazy index dir and cmd
@@ -287,12 +300,15 @@ class CompileFileInfo:
         command = "".join(
             (command[:index], " ", quote(filename), command[index:]))
 
+        workspace_dir = self.workspace_dir_info[similar_compiled_file]
+
         # update command info
         self.groupby_dir()[dir].add(filename_key)
         module_files.add(filename_key)
         self.cmd_info[command] = module_files
         for v in module_files:
             self.file_info[v] = command
+            self.workspace_dir_info[v] = workspace_dir
         return module_files
 
 
@@ -345,6 +361,17 @@ def GetFlags(filename: str, compileFile=None, store=None):
     if compileFile:
         if final_flags := GetFlagsInCompile(filename, compileFile, store):
             return final_flags
+    return None
+
+
+def GetWorkingDirectory(filename: str, compileFile=None, store=None):
+    """get directory for filename from compile database"""
+    if store is None:
+        store = globalStore
+
+    if compileFile:
+        info = compileFileInfoFromStore(compileFile, store)
+        return info.get_working_directory(filename)
     return None
 
 
