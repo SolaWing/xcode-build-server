@@ -460,17 +460,28 @@ def server_api():
         items = []
         for target in params["targets"]:
             if target["uri"] == "dummy://dummy":
-                items.append({
-                    "target": target,
-                    "sources": [
-                        {
-                            # TODO: 换成真实的target和sources
-                            "uri": Path(shared_state.root_path).as_uri(),
-                            "kind": 2, # 1: file, 2: directory
-                            "generated": False
-                        }
-                    ]
-                })
+                items.append(
+                    {
+                        "target": target,
+                        "sources": [
+                            {
+                                # TODO: 换成真实的target和sources
+                                "uri": Path(shared_state.root_path).as_uri(),
+                                "kind": 2,  # 1: file, 2: directory
+                                "generated": False,
+                            },
+                            {
+                                "uri": Path(
+                                    shared_state.config.build_root,
+                                    "SourcePackages",
+                                    "checkouts",
+                                ).as_uri(),
+                                "kind": 2,  # 1: file, 2: directory
+                                "generated": False,
+                            },
+                        ],
+                    }
+                )
 
         return {"jsonrpc": "2.0", "id": message["id"], "result": {"items": items }}
 
