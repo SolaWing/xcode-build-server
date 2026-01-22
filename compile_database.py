@@ -32,6 +32,29 @@ def getXcodeBasePath():
     return XCODE_BASE_PATH
 
 
+SWIFT_TOOLCHAIN_VERSION = None
+
+
+def swift_toolchain_version():
+    global SWIFT_TOOLCHAIN_VERSION
+    if SWIFT_TOOLCHAIN_VERSION is None:
+        try:
+            output = (
+                subprocess.check_output(["xcrun", "swift", "--version"])
+                .rstrip()
+                .decode("utf8")
+            )
+            version_pattern = re.compile(r"swiftlang-([0-9]+)\.([0-9]+)\.([0-9]+)")
+            match = version_pattern.search(output)
+            if match:
+                return [match.group(1), match.group(2), match.group(3)]
+            else:
+                SWIFT_TOOLCHAIN_VERSION = ["5", "0", "0"]
+        except subprocess.CalledProcessError:
+            SWIFT_TOOLCHAIN_VERSION = ["5", "0", "0"]
+    return SWIFT_TOOLCHAIN_VERSION
+
+
 def isProjectRoot(directory):
     return os.path.exists(os.path.join(directory, ".git"))
 
@@ -248,6 +271,8 @@ class CompileFileInfo:
         if not filename.endswith(".swift"):
             return
 
+        if os.path.basename(filename) == "Package.swift":
+            return  # special case for Package.swift, handled in InferFlagsForSwift
         filename = os.path.realpath(filename)
         filename_key = filename.lower()
         if filename_key in self.file_info:
@@ -378,6 +403,39 @@ def GetWorkingDirectory(filename: str, compileFile=None, store=None):
 # TODO: c family infer flags #
 def InferFlagsForSwift(filename, compileFile, store):
     """try infer flags by convention and workspace files"""
+    if os.path.basename(filename) == "Package.swift":  # special case for Package.swift
+        package_dir = filekey(os.path.dirname(filename))
+        final_flags = [filename]
+        # find any compile fine in
+        final_flags += [
+            "-sdk",
+            os.path.join(
+                getXcodeBasePath(),
+                "Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/",
+            ),
+        ]
+
+        compile_file_info = compileFileInfoFromStore(compileFile, store)
+        for file, command in compile_file_info.file_info.items():
+            if file.startswith(f"{package_dir}/sources/") and file.endswith(".swift"):
+                flags = cmd_split(command)[1:]  # ignore executable
+                swift_version_index = flags.index("-swift-version")
+                if swift_version_index != -1 and swift_version_index + 1 < len(flags):
+                    swift_version = flags[swift_version_index + 1]
+                    final_flags += ["-swift-version", swift_version]
+                    break
+
+        final_flags += [
+            "-I",
+            os.path.join(
+                getXcodeBasePath(),
+                "Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/pm/ManifestAPI",
+            ),
+            "-package-description-version",
+            ".".join(swift_toolchain_version()),
+        ]
+        return final_flags
+
     project_root, flagFile, compileFile = findSwiftModuleRoot(filename)
     logging.debug(f"infer root: {project_root}, {compileFile}")
     final_flags = GetFlagsInCompile(filename, compileFile, store)
