@@ -301,7 +301,7 @@ def merge_database(items, database_path):
             return item.get("file") or item.get("module_name")
         return None  # other type info without identifier simplely append into file
 
-    with open(database_path, "r+") as f:
+    with open(database_path, "r") as f:
         # try best effort to keep old data
         old_items = json.load(f)
 
@@ -331,9 +331,10 @@ def merge_database(items, database_path):
         final = [get_new_item(item) for item in old_items]
         final.extend(item for item in items if identifier(item) not in dealed)
 
-        f.seek(0)
+    tmp_path = database_path + ".tmp"
+    with open(tmp_path, "w") as f:
         dump_database(final, f)
-        f.truncate()
+    os.replace(tmp_path, database_path)
 
 
 def output_lock_path(output_path):
@@ -432,8 +433,10 @@ def _parse(args):
     if args.append and os.path.exists(output):
         merge_database(items, output)
     else:
-        # open will clear file
-        dump_database(items, open(output, "w"))
+        tmp_path = output + ".tmp"
+        with open(tmp_path, "w") as f:
+            dump_database(items, f)
+        os.replace(tmp_path, output)
 
 
 def parse(argv):

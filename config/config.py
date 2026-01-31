@@ -76,5 +76,7 @@ class ServerConfig(object):
         })
 
     def save(self):
-        with open(self.path, "w") as f:
+        tmp_path = self.path + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(self.data, f, indent="\t")
+        os.replace(tmp_path, self.path)
