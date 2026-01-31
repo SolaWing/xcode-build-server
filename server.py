@@ -71,6 +71,9 @@ class State(object):
         # background thread to observe changes
         self.observed_thread: Optional[Thread] = None
 
+        self.exception_count = 0
+        self.last_exception_time = 0.0
+
         # {path: mtime} cache. use to find changes
         self.observed_info = {self.config.path: get_mtime(self.config.path)}
 
@@ -224,7 +227,20 @@ class State(object):
                     and main_thread().is_alive()
                     and self == shared_state
                 ):
-                    self.tick()
+                    try:
+                        self.tick()
+                    except Exception as e:
+                        now = time.time()
+                        if now - self.last_exception_time > 10:
+                            self.exception_count = 1
+                        else:
+                            self.exception_count += 1
+                        self.last_exception_time = now
+
+                        if self.exception_count >= 3:
+                            raise
+                        logger.error(f"observe tick failed ({self.exception_count}/3): {e}")
+
                     time.sleep(1)
             except Exception as e:
                 logger.exception(f"observe thread exit by exception: {e}")
