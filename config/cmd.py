@@ -2,6 +2,7 @@ from functools import partial
 import glob
 import inspect
 import os
+import shlex
 import subprocess
 import sys
 import json
@@ -107,18 +108,18 @@ def main(argv=sys.argv):
 
     use_project = False
     if os.path.exists(workspace):
-        cmd_target = f"-workspace '{workspace}'"
+        cmd_target = ["-workspace", workspace]
     elif project:
-        cmd_target = f"-project '{project}'"
+        cmd_target = ["-project", project]
         use_project = True
     else:
         _usage("can't get exist xcworkspace, please specify one")
 
     lastest_scheme = False
     if scheme is None:
-        cmd = f"xcodebuild -list -json {cmd_target}"
-        print("run: ", cmd)
-        output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+        cmd = ["xcodebuild", "-list", "-json", *cmd_target]
+        print("run: ", shlex.join(cmd))
+        output = subprocess.check_output(cmd, universal_newlines=True)
         output = json_loads(output)
         if use_project:
             scheme = output["project"]["schemes"][0]
@@ -128,9 +129,11 @@ def main(argv=sys.argv):
         # _usage("you need to specify scheme!")
 
     # find and record build_root for workspace and scheme
-    cmd = f"xcodebuild -showBuildSettings -json {cmd_target} -scheme '{scheme}' 2>/dev/null"
-    print("run: ", cmd)
-    output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+    cmd = ["xcodebuild", "-showBuildSettings", "-json", *cmd_target, "-scheme", scheme]
+    print("run: ", shlex.join(cmd))
+    output = subprocess.check_output(
+        cmd, stderr=subprocess.DEVNULL, universal_newlines=True
+    )
     output = json_loads(output)
     build_dir = output[0]["buildSettings"]["SYMROOT"]
     build_root = os.path.abspath(os.path.join(build_dir, "../.."))
